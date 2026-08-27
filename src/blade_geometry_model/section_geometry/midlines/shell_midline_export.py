@@ -6,7 +6,7 @@ Export ``section_geometry`` subcomponent midlines as FE-agnostic
 
 **Dependency rule:** this module may import from ``blade_structure_utilities.geometry_utilities.section_contract``
 and from ``blade_structure_utilities.geometry_utilities.section_geometry``, but must **never** import from
-``blade_structure_utilities.fem_utilities.section_shell_model``.
+``blade_structure_utilities.fem_utilities.section_shell_fea``.
 
 **Strip order:** ``build_shell_midline_strips`` yields skins and webs in
 ``components_unrotated`` dict-insertion order, then spar caps in
