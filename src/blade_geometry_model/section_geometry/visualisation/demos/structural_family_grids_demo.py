@@ -1,0 +1,222 @@
+"""
+examples/structural_family_grids_demo.py
+=======================================
+One PNG per structural system (registry ``SYSTEM_TYPE_KEYS``).
+
+Each figure is a single hybrid constructive fill of that SystemType at a fixed
+twist, drawn in a **wide rectangular** frame matching the twin-web /
+torsion-box section demos (not a square data window). Skin-only ``0A`` /
+``0B`` have no flapwise twin.
+
+Writes under ``visualisation/output/structural_family_grids/``:
+
+* ``{key}.png`` — one file per registry key (e.g. ``2D-F.png``, ``3D-CN.png``)
+* ``structural_family_grids.json`` — key inventory + output map
+
+Run from the repository root::
+
+    python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py
+    python .../structural_family_grids_demo.py --twist-deg 15 --families A D
+    python .../structural_family_grids_demo.py --keys 2D-F 3D-CN
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+from collections import defaultdict
+from pathlib import Path
+from typing import Any
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+_EXAMPLES_DIR = Path(__file__).resolve().parent
+
+
+def _load_sibling(name: str, filename: str):
+    path = _EXAMPLES_DIR / filename
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_ensure_mod = _load_sibling("_ensure_repo_path", "_ensure_repo_path.py")
+_ensure_mod.ensure_repo_path()
+_taxonomy = _load_sibling("_taxonomy_cases", "_taxonomy_cases.py")
+
+from blade_structure_utilities.geometry_utilities.section_geometry.api.factory import (
+    SYSTEM_TYPE_KEYS,
+    build_section_view,
+    resolve_system_type,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.plot import (
+    plot_section_hybrid,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import AirfoilSDF
+
+_DPI = 160
+_FAMILIES = ("A", "B", "C", "D")
+# Match ``plot_section`` / naca2412 twin-web & torsion-box figure shape.
+_FIGSIZE = (12.0, 5.0)
+
+
+def _keys_by_family() -> dict[str, list[str]]:
+    by: dict[str, list[str]] = defaultdict(list)
+    for key in SYSTEM_TYPE_KEYS:
+        fam = str(resolve_system_type(key).structural_family).upper()
+        by[fam].append(key)
+    for fam in by:
+        by[fam] = sorted(
+            by[fam],
+            key=lambda k: (
+                resolve_system_type(k).n_webs,
+                0 if resolve_system_type(k).web_orientation == "chord_normal" else 1,
+                k,
+            ),
+        )
+    return dict(by)
+
+
+def _z_tag(key: str) -> str:
+    lay = resolve_system_type(key)
+    n = int(lay.n_webs)
+    if n == 0:
+        return "CN"
+    return "CN" if lay.web_orientation == "chord_normal" else "F"
+
+
+def _png_name(key: str) -> str:
+    """Filesystem-safe name for a SystemType key (keys are already safe)."""
+    return f"{key}.png"
+
+
+def _render_system(
+    key: str,
+    *,
+    airfoil: AirfoilSDF,
+    twist_deg: float,
+    out_dir: Path,
+) -> dict[str, Any]:
+    layout = resolve_system_type(key)
+    twist_use = _taxonomy.twist_deg_for_layout(layout, twist_deg=twist_deg)
+    twist_rad = float(np.deg2rad(twist_use))
+    section = build_section_view(airfoil, layout, twist_angle_rad=twist_rad)
+    n_webs = int(layout.n_webs)
+    z = _z_tag(key)
+    fam = str(layout.structural_family).upper()
+
+    fig, ax = plt.subplots(figsize=_FIGSIZE)
+    plot_section_hybrid(
+        section,
+        residual_mesh=None,
+        ax=ax,
+        alpha=0.5,
+        title=f"{key}\n(n_webs={n_webs}, {z}, twist={twist_use:g}°)",
+        show_legend=False,
+    )
+    # Keep equal scale without expanding to a square data window (twin-web style).
+    ax.set_aspect("equal", adjustable="box")
+    fig.tight_layout()
+
+    out_png = out_dir / _png_name(key)
+    fig.savefig(out_png, dpi=_DPI, facecolor="white", bbox_inches="tight")
+    plt.close(fig)
+    print(f"Wrote {out_png}")
+    return {
+        "key": key,
+        "family": fam,
+        "n_webs": n_webs,
+        "z": z,
+        "n_labels": len(list(section)),
+        "twist_deg": float(twist_use),
+        "png": out_png.name,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    default_out = _EXAMPLES_DIR.parent / "output" / "structural_family_grids"
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--twist-deg", type=float, default=15.0)
+    p.add_argument("--naca", default="2412")
+    p.add_argument("--chord", type=float, default=1.0)
+    p.add_argument(
+        "--families",
+        nargs="*",
+        default=None,
+        help="Subset of A B C D (default: all, unless --keys is set).",
+    )
+    p.add_argument(
+        "--keys",
+        nargs="*",
+        default=None,
+        help="Explicit SystemType keys (overrides --families when set).",
+    )
+    p.add_argument("--out-dir", type=Path, default=default_out)
+    args = p.parse_args(argv)
+
+    out_dir: Path = args.out_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    af = AirfoilSDF.from_naca(args.naca, n_points=140, chord=float(args.chord))
+    by_fam = _keys_by_family()
+
+    if args.keys:
+        keys = [str(k) for k in args.keys]
+        unknown = [k for k in keys if k not in SYSTEM_TYPE_KEYS]
+        if unknown:
+            raise SystemExit(f"Unknown keys {unknown}; have {list(SYSTEM_TYPE_KEYS)}")
+    else:
+        families = list(args.families) if args.families else list(_FAMILIES)
+        keys = []
+        for fam in families:
+            fam_u = str(fam).upper()
+            if fam_u not in by_fam:
+                raise SystemExit(f"Unknown family {fam!r}; have {sorted(by_fam)}")
+            keys.extend(by_fam[fam_u])
+
+    # Drop stale family-grid composites from older demo versions.
+    for stale in out_dir.glob("family_*_grid.png"):
+        stale.unlink(missing_ok=True)
+        print(f"Removed stale {stale.name}")
+
+    systems: list[dict[str, Any]] = []
+    for key in keys:
+        systems.append(
+            _render_system(
+                key,
+                airfoil=af,
+                twist_deg=float(args.twist_deg),
+                out_dir=out_dir,
+            )
+        )
+
+    by_family_summary: dict[str, list[str]] = defaultdict(list)
+    for row in systems:
+        by_family_summary[str(row["family"])].append(str(row["key"]))
+
+    payload = {
+        "naca": args.naca,
+        "chord_m": float(args.chord),
+        "twist_deg": float(args.twist_deg),
+        "n_systems": len(systems),
+        "keys": [row["key"] for row in systems],
+        "by_family": {fam: by_family_summary[fam] for fam in sorted(by_family_summary)},
+        "systems": systems,
+        "notes": (
+            "One PNG per SystemType registry key in a wide rectangular frame "
+            "(same style as twin_web_section / torsion_box_section). "
+            "Taxonomy Y = structural family (A/B/C/D); Z = CN|F. "
+            "Skin-only 0A/0B have no flapwise twin."
+        ),
+    }
+    json_path = out_dir / "structural_family_grids.json"
+    json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"Wrote {json_path} ({len(systems)} systems)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

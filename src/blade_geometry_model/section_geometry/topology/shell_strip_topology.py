@@ -1,0 +1,82 @@
+"""
+shell_strip_topology
+====================
+Geometric junction topology for shell midline strips (B-frame).
+
+Thin orchestrator over focused helpers; public names re-exported for compatibility.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import ShellMidlineStrip
+from blade_structure_utilities.geometry_utilities.section_geometry.sdf.profiling import timed_stage
+
+from blade_structure_utilities.geometry_utilities.section_geometry.midlines.cap_skin_ray_resample import (
+    _SKIN_RAY_CAP_BBOX_MARGIN_M,
+    _resample_one_cap_interior_from_skin_rays,
+    concat_skin_ring_vertices,
+    pick_inward_ray_direction,
+    resample_cap_interiors_from_skin_rays,
+    skin_ring_vertex_tangents,
+)
+from .cap_web_junctions import insert_cap_web_interior_junctions
+from ..midlines.ring_geometry import normal_2d_ccw, point_to_open_polyline_nearest
+from ..midlines.skin_split import _MERGE_S_TOL_M, split_skin_at_junctions
+
+# Compatibility aliases (historic private names used by tests / callers).
+_split_skin_at_junctions = split_skin_at_junctions
+_resample_cap_interiors_from_skin_rays = resample_cap_interiors_from_skin_rays
+_insert_cap_web_interior_junctions = insert_cap_web_interior_junctions
+_concat_skin_ring_vertices = concat_skin_ring_vertices
+_skin_ring_vertex_tangents = skin_ring_vertex_tangents
+_normal_2d_ccw = normal_2d_ccw
+_pick_inward_ray_direction = pick_inward_ray_direction
+_point_to_open_polyline_nearest = point_to_open_polyline_nearest
+
+
+@dataclass(frozen=True)
+class ShellStripTopologySpec:
+    cap_resample_from_skin_rays: bool = True
+    skin_ray_cap_bbox_margin_m: float = _SKIN_RAY_CAP_BBOX_MARGIN_M
+    merge_s_tol_m: float = _MERGE_S_TOL_M
+
+
+def build_shell_strip_topology(
+    strips: tuple[ShellMidlineStrip, ...],
+    spec: ShellStripTopologySpec | None = None,
+    *,
+    stage_sink: dict[str, float] | None = None,
+) -> tuple[ShellMidlineStrip, ...]:
+    """Prepare strip junctions for shell meshing.
+
+    When ``stage_sink`` is provided (or ``SECTION_GEOMETRY_PROFILE=1``), records
+    ``topology_split`` / ``topology_cap_ray`` / ``topology_cap_web`` substages.
+    """
+    cfg = spec if spec is not None else ShellStripTopologySpec()
+    with timed_stage("topology_split", stage_sink):
+        out = split_skin_at_junctions(strips, merge_s_tol_m=cfg.merge_s_tol_m)
+    if cfg.cap_resample_from_skin_rays:
+        with timed_stage("topology_cap_ray", stage_sink):
+            out = resample_cap_interiors_from_skin_rays(
+                out, bbox_margin_m=cfg.skin_ray_cap_bbox_margin_m
+            )
+    with timed_stage("topology_cap_web", stage_sink):
+        out = insert_cap_web_interior_junctions(out)
+    return out
+
+
+__all__ = [
+    "ShellStripTopologySpec",
+    "build_shell_strip_topology",
+    "split_skin_at_junctions",
+    "resample_cap_interiors_from_skin_rays",
+    "insert_cap_web_interior_junctions",
+    "concat_skin_ring_vertices",
+    "skin_ring_vertex_tangents",
+    "normal_2d_ccw",
+    "pick_inward_ray_direction",
+    "point_to_open_polyline_nearest",
+    "_SKIN_RAY_CAP_BBOX_MARGIN_M",
+]

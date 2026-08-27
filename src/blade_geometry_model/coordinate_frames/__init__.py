@@ -1,0 +1,98 @@
+"""
+Coordinate frames: R / B / S / S′ / C / E / M and shell load-channel map.
+
+Ownership homes: ``section_frames/`` (B/S/S′) and ``shell_frames/`` (C/E/M).
+Operational demos: ``visualisation/``.
+
+Prefer this barrel for public imports. Deep home imports are allowed for
+maintainers; do not reimplement twist / NACA pivot / flap↔My/Mz outside these
+homes.
+"""
+
+from .section_frames import (
+    FRAME_ID_BY_LETTER,
+    LETTER_BY_FRAME_ID,
+    PIVOT_FRACTION_DEFAULT,
+    TWISTED_PITCH_AXIS_BLADE_FRAME,
+    ZERO_TWIST_CENTROID_AXIS_STATION_FRAME,
+    ZERO_TWIST_PITCH_AXIS_STATION_FRAME,
+    CoordinateFrameTransforms,
+    S_to_naca,
+    blade_to_chord,
+    chord_to_blade,
+    naca_to_S,
+    naca_to_twisted_pitch_axis_blade_frame,
+    naca_to_zero_twist_pitch_axis_station_frame,
+    rotate_B_to_S,
+    rotate_S_to_B,
+    rotate_S_to_B_swapped_order,
+    rotate_twisted_pitch_axis_blade_frame_to_zero_twist_pitch_axis_station_frame,
+    rotate_zero_twist_pitch_axis_station_frame_to_twisted_pitch_axis_blade_frame,
+    rotate_zero_twist_pitch_axis_station_frame_to_twisted_pitch_axis_blade_frame_swapped_order,
+    twisted_pitch_axis_blade_frame_to_naca,
+    zero_twist_pitch_axis_station_frame_to_naca,
+    section_normal_2d,
+    SECTION_PLOT_XLABEL,
+    SECTION_PLOT_YLABEL,
+    fit_square_section_axes,
+    plot_section_polyline,
+    section_plot_axes,
+    setup_section_axes,
+    structural_product_moment,
+)
+from .shell_frames import (
+    ShellSolverChannels,
+    blade_resultants_to_shell_channels,
+    ply_strain_transform_E_to_M,
+    ply_strain_transform_M_to_E,
+    ply_stress_transform_E_to_M,
+    ply_stress_transform_M_to_E,
+    rotate_ply_strain_E_to_M,
+    rotate_ply_strain_M_to_E,
+    rotate_ply_stress_E_to_M,
+    rotate_ply_stress_M_to_E,
+    rotate_ply_vectors,
+)
+
+__all__ = [
+    "FRAME_ID_BY_LETTER",
+    "LETTER_BY_FRAME_ID",
+    "PIVOT_FRACTION_DEFAULT",
+    "TWISTED_PITCH_AXIS_BLADE_FRAME",
+    "ZERO_TWIST_CENTROID_AXIS_STATION_FRAME",
+    "ZERO_TWIST_PITCH_AXIS_STATION_FRAME",
+    "CoordinateFrameTransforms",
+    "ShellSolverChannels",
+    "S_to_naca",
+    "blade_resultants_to_shell_channels",
+    "blade_to_chord",
+    "chord_to_blade",
+    "naca_to_S",
+    "naca_to_twisted_pitch_axis_blade_frame",
+    "naca_to_zero_twist_pitch_axis_station_frame",
+    "rotate_B_to_S",
+    "rotate_S_to_B",
+    "rotate_S_to_B_swapped_order",
+    "rotate_twisted_pitch_axis_blade_frame_to_zero_twist_pitch_axis_station_frame",
+    "rotate_zero_twist_pitch_axis_station_frame_to_twisted_pitch_axis_blade_frame",
+    "rotate_zero_twist_pitch_axis_station_frame_to_twisted_pitch_axis_blade_frame_swapped_order",
+    "twisted_pitch_axis_blade_frame_to_naca",
+    "zero_twist_pitch_axis_station_frame_to_naca",
+    "section_normal_2d",
+    "SECTION_PLOT_XLABEL",
+    "SECTION_PLOT_YLABEL",
+    "fit_square_section_axes",
+    "plot_section_polyline",
+    "section_plot_axes",
+    "setup_section_axes",
+    "structural_product_moment",
+    "ply_strain_transform_E_to_M",
+    "ply_strain_transform_M_to_E",
+    "ply_stress_transform_E_to_M",
+    "ply_stress_transform_M_to_E",
+    "rotate_ply_strain_E_to_M",
+    "rotate_ply_strain_M_to_E",
+    "rotate_ply_stress_E_to_M",
+    "rotate_ply_stress_M_to_E",
+    "rotate_ply_vectors",
+]
