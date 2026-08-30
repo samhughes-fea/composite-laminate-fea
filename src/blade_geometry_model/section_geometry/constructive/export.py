@@ -19,7 +19,12 @@ from .emitters import (
     emit_shear_web_polygon,
     emit_spar_cap_polygon,
 )
-from .helpers import airfoil_polygon, ensure_polygon, rotate_geom
+from .helpers import (
+    airfoil_polygon,
+    ensure_polygon,
+    offset_polygon_inward,
+    rotate_geom,
+)
 from .labels import is_core_label, is_laminate_label, is_skin_label
 
 
@@ -65,9 +70,7 @@ def _union_discrete_caps(
             continue
         if shared_deeper is None and airfoil_poly is not None:
             depth = float(comp.skin_thickness) + float(comp.cap_height)
-            shared_deeper = airfoil_poly.buffer(
-                -depth, quad_segs=16, join_style=2, mitre_limit=5.0
-            )
+            shared_deeper = offset_polygon_inward(airfoil_poly, depth)
         parts.append(
             emit_spar_cap_polygon(
                 comp,
@@ -153,9 +156,7 @@ def _shared_deeper_by_surface(
             continue
         if pair not in cache:
             skin_t, cap_h = pair
-            cache[pair] = airfoil_poly.buffer(
-                -(skin_t + cap_h), quad_segs=16, join_style=2, mitre_limit=5.0
-            )
+            cache[pair] = offset_polygon_inward(airfoil_poly, skin_t + cap_h)
         out[surface] = cache[pair]
     return out
 

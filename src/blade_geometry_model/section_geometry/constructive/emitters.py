@@ -14,6 +14,7 @@ from .helpers import (
     ensure_polygon,
     flapwise_bay_clip,
     half_plane_clip,
+    offset_polygon_inward,
     rotate_geom,
     stadium_polygon,
 )
@@ -45,7 +46,7 @@ def emit_outer_skin_polygon(
     inner = (
         inner_cavity
         if inner_cavity is not None
-        else poly.buffer(-t, quad_segs=16, join_style=2, mitre_limit=5.0)
+        else offset_polygon_inward(poly, t)
     )
     if inner.is_empty:
         annulus = ensure_polygon(poly)
@@ -95,12 +96,7 @@ def emit_shear_web_polygon(
         skin_thickness = getattr(comp, "skin_thickness", None)
         if af is not None and skin_thickness is not None:
             poly = airfoil_polygon(af)
-            cav = poly.buffer(
-                -float(skin_thickness),
-                quad_segs=16,
-                join_style=2,
-                mitre_limit=5.0,
-            )
+            cav = offset_polygon_inward(poly, float(skin_thickness))
             if not cav.is_empty:
                 stadium = stadium.intersection(cav)
     # Thick skin / shallow sections can empty the cavity ∩ stadium Boolean.
@@ -142,14 +138,12 @@ def emit_spar_cap_polygon(
     inner = (
         inner_cavity
         if inner_cavity is not None
-        else poly.buffer(-skin_t, quad_segs=16, join_style=2, mitre_limit=5.0)
+        else offset_polygon_inward(poly, skin_t)
     )
     deeper = (
         deeper_cavity
         if deeper_cavity is not None
-        else poly.buffer(
-            -(skin_t + cap_h), quad_segs=16, join_style=2, mitre_limit=5.0
-        )
+        else offset_polygon_inward(poly, skin_t + cap_h)
     )
     if inner.is_empty:
         raise ValueError("SparCap: inner-skin offset is empty.")
@@ -210,7 +204,7 @@ def emit_inner_cavity_polygon(
 ) -> Polygon | MultiPolygon:
     """Interior of the inner skin: Offset(airfoil, -skin)."""
     poly = airfoil_poly if airfoil_poly is not None else airfoil_polygon(airfoil_sdf)
-    cavity = poly.buffer(-float(skin_thickness), quad_segs=16, join_style=2, mitre_limit=5.0)
+    cavity = offset_polygon_inward(poly, float(skin_thickness))
     # Fully closed sections (skin ≥ local thickness) yield an empty cavity.
     return ensure_polygon(cavity, allow_empty=True)
 

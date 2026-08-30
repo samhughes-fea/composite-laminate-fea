@@ -51,6 +51,7 @@ def _closed_mid_ring(airfoil_sdf, thickness: float) -> np.ndarray:
 
     from blade_structure_utilities.geometry_utilities.section_geometry.constructive.helpers import (
         airfoil_polygon,
+        offset_polygon_inward,
     )
 
     verts = getattr(airfoil_sdf, "vertices", None)
@@ -68,7 +69,7 @@ def _closed_mid_ring(airfoil_sdf, thickness: float) -> np.ndarray:
         raise ValueError("OuterSkin thickness must be positive.")
 
     poly = airfoil_polygon(airfoil_sdf)
-    mid_geom = poly.buffer(-0.5 * t, quad_segs=16, join_style=2, mitre_limit=5.0)
+    mid_geom = offset_polygon_inward(poly, 0.5 * t)
     if mid_geom.is_empty:
         raise ValueError(
             f"OuterSkin mid-surface buffer(-t/2) is empty for thickness={t:g}."

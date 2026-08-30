@@ -19,6 +19,42 @@ from blade_structure_utilities.integration_utilities.shoelace_integration import
 # reports A≈0 and previously crashed on Cx = Sx/(6A).
 _MIN_PART_AREA = 1e-16
 
+# The inward-offset join contract. Every offset locus in the package — skin
+# mid-surface, inner cavity, cap slab, cap mid-surface — must come from these
+# exact settings, because the package's junction exactness rests on loci at
+# different depths being *parallel by construction*. A mitre join is the exact
+# equidistant point for a locally-convex ring, so linear interpolation along an
+# offset polyline stays on the locus; a different join style would not be
+# equidistant, and two loci built with different settings would silently stop
+# being parallel. Kept private: go through :func:`offset_polygon_inward`.
+_OFFSET_QUAD_SEGS = 16
+_OFFSET_JOIN_STYLE = 2  # mitre
+_OFFSET_MITRE_LIMIT = 5.0
+
+
+def offset_polygon_inward(poly, depth: float, *, quad_segs: int | None = None):
+    """Inward normal offset of ``poly`` by ``depth``, the one offset operator.
+
+    This is the single site that decides what "the offset locus at depth d"
+    means. Prefer it over calling ``poly.buffer(-d, ...)``: the join settings
+    are the package's parallelism contract (see ``docs/bug_log.md`` SG-001 and
+    SG-003, where two loci that were not where each other expected produced
+    10 mm displacements).
+
+    Returns Shapely's result unchanged, **including an empty geometry** when
+    the section is thinner than twice ``depth``. Callers decide whether empty
+    is infeasible or simply means "no cavity here", and several rely on that.
+    """
+    d = float(depth)
+    if not np.isfinite(d) or d < 0.0:
+        raise ValueError(f"offset_polygon_inward requires a finite depth >= 0; got {depth!r}.")
+    return poly.buffer(
+        -d,
+        quad_segs=_OFFSET_QUAD_SEGS if quad_segs is None else int(quad_segs),
+        join_style=_OFFSET_JOIN_STYLE,
+        mitre_limit=_OFFSET_MITRE_LIMIT,
+    )
+
 
 def airfoil_polygon(airfoil_sdf) -> Polygon:
     verts = getattr(airfoil_sdf, "vertices", None)
@@ -34,20 +70,17 @@ def airfoil_polygon(airfoil_sdf) -> Polygon:
 def airfoil_offset_ring(airfoil_sdf, depth: float, *, quad_segs: int = 16) -> np.ndarray:
     """Vertices of the inward **normal**-offset locus ``phi_airfoil = -depth``.
 
-    Same offset family as :func:`emit_outer_skin_polygon` and
-    :func:`emit_spar_cap_polygon`, so a mid-surface built from this ring sits
-    exactly inside the corresponding solid. The mitre join is the exact
-    equidistant point for a locally-convex ring, so linear interpolation
-    *along* the returned polyline stays on the locus.
+    Goes through :func:`offset_polygon_inward`, so this is the same offset
+    family as :func:`emit_outer_skin_polygon` and :func:`emit_spar_cap_polygon`
+    and a mid-surface built from this ring sits exactly inside the
+    corresponding solid.
 
     Returns an ``(M, 2)`` ring **without** the repeated closing vertex.
     """
     d = float(depth)
     if not np.isfinite(d) or d <= 0.0:
         raise ValueError(f"airfoil_offset_ring requires depth > 0; got {depth!r}.")
-    geom = airfoil_polygon(airfoil_sdf).buffer(
-        -d, quad_segs=int(quad_segs), join_style=2, mitre_limit=5.0
-    )
+    geom = offset_polygon_inward(airfoil_polygon(airfoil_sdf), d, quad_segs=quad_segs)
     if geom.is_empty:
         raise InfeasibleSectionGeometry(
             f"Inward offset at depth={d:g} is empty; the section is thinner than "
