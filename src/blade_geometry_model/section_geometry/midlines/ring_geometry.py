@@ -233,6 +233,97 @@ def intersect_open_polylines_2d(
     return out
 
 
+def intersect_web_axis_open_polyline_2d(
+    web_pts: NDArray[np.float64],
+    cap_pts: NDArray[np.float64],
+    *,
+    endpoint_tol_m: float = 1e-9,
+) -> list[tuple[int, int, float, float, NDArray[np.float64]]]:
+    """Interior hits of the web axis (``web[0]→web[-1]``) against an open polyline.
+
+    Returns ``(i_cap_edge, j_web_edge, ta, tb, point)`` in the same shape as
+    :func:`intersect_open_polylines_2d`. Cap **endpoints** are excluded (those are
+    cap-end junctions closed at emit). ``ta`` is the parameter on the cap edge;
+    ``tb`` is the parameter on the discrete web edge that carries the same point
+    along the axis (for insertion into the sampled web polyline).
+
+    This is the production interior-junction solver (SG-009). Prefer it over
+    :func:`intersect_open_polylines_2d` for topology truth: polyline×polyline
+    detection cannot verify its own work once a shared node has been inserted
+    (tangency trap, SG-005).
+    """
+    web = np.asarray(web_pts, dtype=float)
+    cap = np.asarray(cap_pts, dtype=float)
+    if web.ndim != 2 or web.shape[0] < 2 or cap.ndim != 2 or cap.shape[0] < 2:
+        return []
+
+    origin = web[0]
+    span = web[-1] - web[0]
+    length = float(np.linalg.norm(span))
+    if length < 1e-12:
+        return []
+    direction = span / length
+
+    seg_start = cap[:-1]
+    seg = cap[1:] - seg_start
+    denominator = seg[:, 0] * direction[1] - seg[:, 1] * direction[0]
+    usable = np.abs(denominator) > 1e-14
+    safe = np.where(usable, denominator, 1.0)
+    rel = origin - seg_start
+    u = np.where(usable, (rel[:, 0] * direction[1] - rel[:, 1] * direction[0]) / safe, -9.0)
+    t_axis = np.where(
+        usable, (rel[:, 0] * seg[:, 1] - rel[:, 1] * seg[:, 0]) / safe, -9.0
+    )
+    on_both = (
+        usable
+        & (u >= -1e-9)
+        & (u <= 1.0 + 1e-9)
+        & (t_axis >= -1e-9)
+        & (t_axis <= length + 1e-9)
+    )
+
+    # Axis parameter of each web vertex, for mapping hits onto discrete edges.
+    t_vert = np.sum((web - origin) * direction, axis=1)
+
+    out: list[tuple[int, int, float, float, NDArray[np.float64]]] = []
+    end_tol = float(endpoint_tol_m)
+    for i in np.flatnonzero(on_both):
+        ta = float(np.clip(u[i], 0.0, 1.0))
+        t_hit = float(np.clip(t_axis[i], 0.0, length))
+        point = (seg_start[i] + ta * seg[i]).astype(float).reshape(2)
+        at_cap_end = min(
+            float(np.linalg.norm(point - cap[0])),
+            float(np.linalg.norm(point - cap[-1])),
+        )
+        if at_cap_end < end_tol:
+            continue
+
+        j_web = -1
+        tb = 0.0
+        for j in range(int(web.shape[0]) - 1):
+            t0 = float(t_vert[j])
+            t1 = float(t_vert[j + 1])
+            span_e = t1 - t0
+            if abs(span_e) < 1e-15:
+                if abs(t_hit - t0) <= 1e-9:
+                    j_web = j
+                    tb = 0.0
+                    break
+                continue
+            # Inclusive so a hit at an existing web vertex still maps.
+            lo, hi = (t0, t1) if span_e > 0.0 else (t1, t0)
+            if t_hit < lo - 1e-9 or t_hit > hi + 1e-9:
+                continue
+            tb = (t_hit - t0) / span_e
+            tb = float(np.clip(tb, 0.0, 1.0))
+            j_web = j
+            break
+        if j_web < 0:
+            continue
+        out.append((int(i), int(j_web), ta, tb, point))
+    return out
+
+
 def open_polyline_min_segment_length(pts: NDArray[np.float64]) -> float:
     if pts.shape[0] < 2:
         return float("inf")
@@ -280,6 +371,7 @@ __all__ = [
     "open_polyline_prefix_lengths",
     "intersect_open_segments_2d",
     "intersect_open_polylines_2d",
+    "intersect_web_axis_open_polyline_2d",
     "open_polyline_min_segment_length",
     "point_to_open_polyline_nearest",
     "normal_2d_ccw",

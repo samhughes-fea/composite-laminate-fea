@@ -34,6 +34,9 @@ from blade_structure_utilities.geometry_utilities.section_geometry.api.factory i
     build_section_view,
     resolve_system_type,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.midlines.ring_geometry import (
+    intersect_web_axis_open_polyline_2d,
+)
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shell_midline_export import (
     build_shell_midline_strips,
 )
@@ -49,34 +52,7 @@ TWIST_DEG = 0.0
 
 def _axis_crossings(web: np.ndarray, cap: np.ndarray) -> list[np.ndarray]:
     """Interior hits of the web axis against the cap polyline (SG-009 oracle)."""
-    origin = web[0]
-    direction = web[-1] - web[0]
-    length = float(np.linalg.norm(direction))
-    if length < 1e-12:
-        return []
-    direction = direction / length
-
-    seg_start = cap[:-1]
-    seg = cap[1:] - seg_start
-    denominator = seg[:, 0] * direction[1] - seg[:, 1] * direction[0]
-    usable = np.abs(denominator) > 1e-14
-    safe = np.where(usable, denominator, 1.0)
-    rel = origin - seg_start
-    u = np.where(usable, (rel[:, 0] * direction[1] - rel[:, 1] * direction[0]) / safe, -9.0)
-    t = np.where(usable, (rel[:, 0] * seg[:, 1] - rel[:, 1] * seg[:, 0]) / safe, -9.0)
-    on_both = usable & (u >= -1e-9) & (u <= 1.0 + 1e-9) & (t >= -1e-9) & (t <= length + 1e-9)
-
-    out: list[np.ndarray] = []
-    for i in np.flatnonzero(on_both):
-        point = seg_start[i] + u[i] * seg[i]
-        at_cap_end = min(
-            float(np.linalg.norm(point - cap[0])),
-            float(np.linalg.norm(point - cap[-1])),
-        )
-        if at_cap_end < 1e-9:
-            continue
-        out.append(np.asarray(point, dtype=float).reshape(2))
-    return out
+    return [hit[-1] for hit in intersect_web_axis_open_polyline_2d(web, cap)]
 
 
 def _prepared(layout_key: str, *, chord_m: float, twist_deg: float):

@@ -34,7 +34,7 @@ Deviations are stated per entry.
 | [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Fixed** — plot mirrors the resampler; the constant is gone |
 | [SG-007](#sg-007) | Absolute merge / coincide floors leave a 0.89 µm cap-node residual | **Fixed** — arc-fraction merge; coincide tol 1 nm |
 | [SG-008](#sg-008) | Airfoil polygonisation is the package's real exactness floor, and is un-budgeted | **Closed** — polygon *is* the section; documented |
-| [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Deferred** — architectural; wait on emit rewrite |
+| [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Fixed** — post-resample web-axis × final-cap solve |
 | [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Fixed** — `n_samples` derived from a 1 µm solid-clip budget |
 
 ## Standing invariant (established 2026-08-30)
@@ -724,9 +724,10 @@ explicit product decision.
 
 **Junction detection reads sampled polylines, so exactness fights detectability**
 
-**Status:** Deferred — architectural; no live defect
+**Status:** Fixed — post-resample web-axis × final-cap solve
 **Found:** 2026-08-30, generalising SG-005
-**Area:** `topology/` and `midlines/` junction path
+**Fixed:** 2026-08-30
+**Area:** `topology/cap_web_junctions.py`, `midlines/ring_geometry.py`
 
 ### Symptom
 
@@ -741,44 +742,38 @@ This has now bitten twice, in opposite directions:
 
 - SG-005's first attempt inserted the web node at emit, which made the cap side
   undetectable and swapped the defect (`4D-F`: web 1570 µm → 0, cap 0 → 1056 µm).
-- After SG-005 was fixed correctly, re-running the production detector over the
-  prepared strips finds **zero** interior crossings across 81 configurations —
+- After SG-005 was fixed correctly, re-running the polyline×polyline detector over
+  the prepared strips finds **zero** interior crossings across 81 configurations —
   correct behaviour that looks identical to "the pass did nothing".
 
 The second point is the sharper problem: it means neither a verification script
-nor a regression test may use the production detector, because such a test passes
-on a correct fix *and* on one that deleted every junction.
-`test_cap_web_interior_junction_shared_node.py` works around it by locating
-crossings from the web axis instead, and says so at length.
+nor a regression test may use polyline×polyline as the existence proof, because
+such a test passes on a correct fix *and* on one that deleted every junction.
 
 ### Root cause
 
-Junctions are recovered from **sampled polylines** rather than solved from the
-primitives that generated them. A web is a straight axis and a cap is an offset
-locus; their intersection is computable directly, and neither participant's
-sampling should be able to hide it.
+Interior junctions were recovered from **sampled polylines** via
+`intersect_open_polylines_2d` rather than solved from the web axis against the
+final (post-resample) cap. Cap interiors cannot close at emit because ray
+resample rebuilds them.
 
-### Proposed direction
+### Fix
 
-Generalise what SG-002 and SG-004 already do for the web foot and the cap end:
-solve each junction from the analytic primitives (web axis line × offset ring)
-and then sample both strips *through* the solved point, instead of sampling first
-and intersecting afterwards. That makes SG-005's fix the rule rather than a
-guarded special case, and removes the class of trap above rather than
-documenting around it each time.
+`insert_cap_web_interior_junctions` now solves interiors with
+`intersect_web_axis_open_polyline_2d` (web axis × final cap), then inserts the
+same point into both strips — same insertion / pending-web machinery as SG-005.
+Cap-end junctions stay at emit (`_insert_web_cap_junction_nodes`).
+`intersect_open_polylines_2d` remains for tools; it is not topology truth.
 
-**Deferred** after SG-008 closed: the polygon contract is settled, but this still
-touches the emit path for every component and is not fixing a live numeric
-defect. SG-005's detect-then-insert guard remains the production rule until that
-rewrite.
+Design record:
+[`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md).
 
-**Design spike (2026-08-30):** post-resample web-axis × final-cap solve is the
-chosen direction — see
-[`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md)
-and the offline check
-[`visualisation/demos/sg009_axis_cap_junction_spike.py`](../visualisation/demos/sg009_axis_cap_junction_spike.py).
-Status remains Deferred pending a separate rewrite decision. BL-014 and
-analytic-NACA LE budgets are out of scope for that rewrite.
+### Verification
+
+- `test_cap_web_interior_junction_shared_node.py` — LAYOUTS × twist × chord, 1 nm
+  gaps on both strips; oracle is the same axis×cap primitive.
+- Related web-foot / shell-strip / cap-resample fidelity suites green.
+- BL-014 and pre-sample analytic offset-ring × axis left out of scope.
 
 ---
 

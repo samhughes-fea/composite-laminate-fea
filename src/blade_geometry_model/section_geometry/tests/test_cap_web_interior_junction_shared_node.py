@@ -7,19 +7,20 @@ endpoints within ``ENDPOINT_TOL_FRAC`` — 6 mm on a 1 m chord — a tolerance t
 scales with *chord* rather than with mesh density, so refining the web or
 shrinking the chord erodes it silently with no error raised.
 
-**Why this test does not use ``intersect_open_polylines_2d``.** That is the
-detector the fix itself uses, and once both strips carry the shared node the two
-polylines *touch* rather than cross, so a strict-interior intersection finds
-nothing at all. A test built on it would pass vacuously on a correct fix and
-also on a fix that deleted every junction. Crossings are therefore located
-independently here, from the web's own axis against the cap polyline.
+**Why this test does not use ``intersect_open_polylines_2d``.** That detector
+returns nothing once both strips carry the shared node (strict-interior
+intersection becomes a tangency). A test built on it would pass vacuously on a
+correct fix and also on a fix that deleted every junction. Crossings are located
+independently via :func:`intersect_web_axis_open_polyline_2d` — the same
+axis×cap primitive production now uses (SG-009), applied to the *prepared*
+strips as an existence oracle.
 
 That trap is not hypothetical: an earlier attempt inserted the web node at emit,
 which made the polylines tangent and stopped the cap side being found —
 ``4D-F`` swapped from web 1570 um / cap 0 um to web 0 um / cap 1056 um. Hence
 the second test, which pins the cap side against exactly that regression.
 
-See ``docs/bug_log.md`` SG-005.
+See ``docs/bug_log.md`` SG-005 / SG-009.
 """
 
 from __future__ import annotations
@@ -30,6 +31,9 @@ import pytest
 from blade_structure_utilities.geometry_utilities.section_geometry.api.factory import (
     build_section_view,
     resolve_system_type,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.midlines.ring_geometry import (
+    intersect_web_axis_open_polyline_2d,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shell_midline_export import (
     build_shell_midline_strips,
@@ -79,40 +83,8 @@ def _by_kind(strips, kind):
 
 
 def _axis_crossings(web: np.ndarray, cap: np.ndarray) -> list[np.ndarray]:
-    """Points where the web's own axis meets the cap polyline, interior only.
-
-    Independent of the production detector on purpose — see the module
-    docstring. Endpoints of the cap are excluded: those are cap-*end* junctions,
-    which ``shell_midline_export`` already closes at emit (SG-004).
-    """
-    origin = web[0]
-    direction = web[-1] - web[0]
-    length = float(np.linalg.norm(direction))
-    if length < 1e-12:
-        return []
-    direction = direction / length
-
-    seg_start = cap[:-1]
-    seg = cap[1:] - seg_start
-    denominator = seg[:, 0] * direction[1] - seg[:, 1] * direction[0]
-    usable = np.abs(denominator) > 1e-14
-    safe = np.where(usable, denominator, 1.0)
-    rel = origin - seg_start
-    u = np.where(usable, (rel[:, 0] * direction[1] - rel[:, 1] * direction[0]) / safe, -9.0)
-    t = np.where(usable, (rel[:, 0] * seg[:, 1] - rel[:, 1] * seg[:, 0]) / safe, -9.0)
-
-    on_both = usable & (u >= -1e-9) & (u <= 1.0 + 1e-9) & (t >= -1e-9) & (t <= length + 1e-9)
-    out = []
-    for i in np.flatnonzero(on_both):
-        point = seg_start[i] + u[i] * seg[i]
-        at_cap_end = min(
-            float(np.linalg.norm(point - cap[0])),
-            float(np.linalg.norm(point - cap[-1])),
-        )
-        if at_cap_end < 1e-9:
-            continue
-        out.append(point)
-    return out
+    """Interior axis×cap hits — production primitive used as an existence oracle."""
+    return [hit[-1] for hit in intersect_web_axis_open_polyline_2d(web, cap)]
 
 
 def _interior_junctions(strips):
@@ -158,7 +130,6 @@ def test_cap_still_carries_its_node_at_every_interior_crossing(layout_key, twist
         assert gap <= _MAX_CAP_GAP_M, (
             f"{layout_key} @ {twist_deg} deg, chord {chord_m} m: the cap's nearest node "
             f"is {gap * 1e6:.1f} um from an interior web crossing. Placing a web vertex "
-            "exactly on the cap turns the crossing into a tangency, and "
-            "intersect_open_polylines_2d then stops finding it — which moves the defect "
-            "from the web to the cap instead of fixing it."
+            "exactly on the cap turns a polyline×polyline crossing into a tangency — "
+            "axis×cap detection (SG-009) must still place the shared node on both strips."
         )

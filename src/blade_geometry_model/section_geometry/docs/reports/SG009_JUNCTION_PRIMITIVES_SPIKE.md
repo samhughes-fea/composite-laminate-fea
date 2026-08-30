@@ -1,7 +1,9 @@
-﻿# SG-009 — junction primitives design spike
+# SG-009 — junction primitives design spike
 
-Design spike only. Does **not** change the production emit or topology path.
-Status of the bug remains **Deferred** until a separate rewrite is approved.
+Design spike + migration note. The production rewrite landed 2026-08-30:
+`insert_cap_web_interior_junctions` now uses post-resample web-axis x final-cap
+solves (`intersect_web_axis_open_polyline_2d`). Bug status: **Fixed**
+([`bug_log` SG-009](../bug_log.md#sg-009)).
 
 ↑ [`docs index`](../README.md) · [`bug_log` SG-009](../bug_log.md#sg-009) ·
 [`section_geometry`](../../README.md)
@@ -13,7 +15,7 @@ Status of the bug remains **Deferred** until a separate rewrite is approved.
 3. [Chosen direction](#chosen-direction)
 4. [Proposed API shape](#proposed-api-shape)
 5. [Tangency and test-oracle rules](#tangency-and-test-oracle-rules)
-6. [Migration sketch (future rewrite)](#migration-sketch-future-rewrite)
+6. [Migration sketch (landed)](#migration-sketch-landed)
 7. [Offline prototype](#offline-prototype)
 8. [Non-goals](#non-goals)
 
@@ -107,16 +109,15 @@ topology truth; it may remain for tools and demos.
 | Cap-end junctions stay at emit on the web only | Cap interiors are rebuilt afterwards |
 | Default path does not flip in this spike | Spike is design + offline check only |
 
-## Migration sketch (future rewrite)
+## Migration sketch (landed)
 
-1. Replace the `intersect_open_polylines_2d` loop in
-   `insert_cap_web_interior_junctions` with axis×cap solves on the post-resample
-   strips (same insertion / pending-web machinery).
-2. Keep `_insert_web_cap_junction_nodes` for cap **ends** at emit.
-3. Leave `intersect_open_polylines_2d` exported for measurement tools; do not
-   use it as the existence proof in tests.
-4. Gate behind review of shared-node, web-foot, and cap endpoint fidelity tests;
-   no BL-014 work in the same change.
+1. Replaced the `intersect_open_polylines_2d` loop in
+   `insert_cap_web_interior_junctions` with `intersect_web_axis_open_polyline_2d`
+   on the post-resample strips (same insertion / pending-web machinery).
+2. Kept `_insert_web_cap_junction_nodes` for cap **ends** at emit.
+3. Left `intersect_open_polylines_2d` exported for measurement tools; tests use
+   the axis x cap primitive as the existence oracle.
+4. Gated on shared-node / web-foot / shell-strip fidelity; no BL-014 work.
 
 ## Offline prototype
 
@@ -139,9 +140,7 @@ python blade_structure_utilities/geometry_utilities/section_geometry/visualisati
 
 ## Non-goals
 
-- No change to default emit / topology behaviour in this spike.
 - No BL-014 triage (tied-web Hashin FI).
 - No analytic-NACA LE `n_points` budget (SG-008 reading 2 stays rejected;
   polygon is the contract).
-- No production rewrite until this note is reviewed and a separate change is
-  approved.
+- No pre-sample analytic offset-ring x axis (longer-term; still out of scope).

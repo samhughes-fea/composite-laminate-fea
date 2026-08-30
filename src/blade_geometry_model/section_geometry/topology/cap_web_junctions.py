@@ -11,7 +11,7 @@ from blade_structure_utilities.geometry_utilities.section_contract.shell_midline
 
 from ..midlines.ring_geometry import (
     _MIN_SEGMENT_LENGTH_M,
-    intersect_open_polylines_2d,
+    intersect_web_axis_open_polyline_2d,
     open_polyline_min_segment_length,
     open_polyline_prefix_lengths,
 )
@@ -76,10 +76,11 @@ def insert_cap_web_interior_junctions(
 ) -> tuple[ShellMidlineStrip, ...]:
     """Give cap **and** web a shared node at every interior cap-web T-junction.
 
-    (1) Strict interior **segment intersections** of the cap with each web
-    polyline. Each crossing is solved once and the *same* point is inserted into
-    both strips, so the junction is conformal by construction rather than by the
-    mesher clustering two nearby nodes.
+    (1) Solve each interior crossing as **web axis × final cap polyline**
+    (:func:`intersect_web_axis_open_polyline_2d`, SG-009). Each hit is solved
+    once and the *same* point is inserted into both strips, so the junction is
+    conformal by construction rather than by the mesher clustering two nearby
+    nodes.
     (2) Optional **proximity** to each shear-web **foot** (endpoint on skin): when
     enabled (``foot_proximity_tol_m > 0``) and the foot is within tolerance of the
     cap polyline, insert the foot ``yz`` as a new vertex. Cap-side only — the foot
@@ -96,13 +97,10 @@ def insert_cap_web_interior_junctions(
     cap-*end* junctions on the web at emit, but it cannot close interior ones:
     the cap it would compute against is not the cap that survives resampling.
     Nor can the web side be done first and the cap side detected afterwards —
-    placing a web vertex exactly on the cap turns the crossing into a tangency
-    and :func:`intersect_open_polylines_2d` then finds nothing, which measured as
-    a clean swap of which side was broken (``4D-F``: web 1570 um -> 0,
-    cap 0 -> 1056 um). Detection therefore runs against the *original* polylines
-    and every insertion is applied afterwards; because an inserted point already
-    lies on the segment it is inserted into, neither shape moves and the
-    detection stays valid. See ``docs/bug_log.md`` SG-005.
+    placing a web vertex exactly on the cap turns a polyline×polyline crossing
+    into a tangency (SG-005 ``4D-F`` swap). Axis×cap detection does not have that
+    trap, but insertions are still held and applied afterwards so both sides get
+    the same solved point. See ``docs/bug_log.md`` SG-005 / SG-009.
     """
     web_pts: list[NDArray[np.float64]] = []
     web_feet: list[NDArray[np.float64]] = []
@@ -155,7 +153,7 @@ def insert_cap_web_interior_junctions(
         n = int(pts.shape[0])
         seg_lens = np.linalg.norm(np.diff(pts, axis=0), axis=1)
         for w, w_idx in zip(web_pts, web_strip_index, strict=True):
-            for i, j, ta, tb, p_hit in intersect_open_polylines_2d(pts, w):
+            for i, j, ta, tb, p_hit in intersect_web_axis_open_polyline_2d(w, pts):
                 seg_len = float(seg_lens[i])
                 if seg_len < min_seg:
                     continue
