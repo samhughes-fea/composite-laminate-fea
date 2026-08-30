@@ -33,6 +33,9 @@ Deviations are stated per entry.
 | [SG-005](#sg-005) | Interior cap–web T-junctions have a node on the **cap** side only | **Fixed** — one solved crossing inserted into both strips |
 | [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Fixed** — plot mirrors the resampler; the constant is gone |
 | [SG-007](#sg-007) | `_CAP_WEB_JUNCTION_MERGE_ARC_M` collapses distinct crossings on a short cap | **Open** — 0.89 µm residual, pre-dates SG-005 |
+| [SG-008](#sg-008) | Airfoil polygonisation is the package's real exactness floor, and is un-budgeted | **Open** — ~62 µm at the LE; needs a decision before a fix |
+| [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Open** — architectural; SG-005 is a guarded instance |
+| [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Open** — 18.6 µm at 1 m chord |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -91,7 +94,9 @@ Deleted during the 2026-08-30 cleanup, 0 references each: `_CAP_ENDPOINT_ON_WEB_
 `ShellStripTopologySpec.skin_ray_cap_bbox_margin_m`, and the
 `skin_ray_cap_bbox_margin_m` parameter of `shell_mesh_inputs_from_section`.
 
-**Still open:** SG-007.
+**Still open:** SG-007 (a 0.89 µm residual in the junction path) and SG-008 /
+SG-009 / SG-010, which are about the *resolution the section is entitled to
+claim* rather than about junctions. None is a live defect.
 
 ### One offset operator (hardened 2026-08-30)
 
@@ -164,6 +169,19 @@ absolute metres while everything around it was chord-relative. It is now
 used to sit beside it had no consumers once the derived form landed and has been
 deleted; a caller that needs an absolute value still passes `merge_s_tol_m`
 explicitly to `split_skin_at_junctions`.
+
+### Cleared by measurement (2026-08-30)
+
+Candidates that looked like sampling error and are not. Recorded so they are not
+re-investigated: refining any of these buys nothing.
+
+| Candidate | Measured |
+|---|---|
+| Cap midline sampling, `n_cap_samples = 80` | **0.00 µm** against a 5000-sample reference (`2D-F` suction cap). The loci are polygon offsets — piecewise linear — and interpolation along a segment stays on the locus, so `n` sets node density, not fidelity. Likewise `n_web_samples = 20` on a straight axis. |
+| `inner_y_at_x`, 240 samples + 10 bisections | **<0.005 µm** against 20000 samples / 60 bisections, at x/c = 0.15–0.70. φ is piecewise linear along a vertical line, so the linear interpolation already *is* the exact crossing. |
+| `inner_y_at_xs(..., bisection_iters=0)` in `cap_feasibility_clamp` | **0.00 µm** against 60 iterations at the same stations, for the same reason. The shortcut costs nothing, and its comment's "feasibility only needs clamp accuracy" caveat is unnecessary. |
+| `mitre_limit = 5.0` silent bevel fallback | **Never triggers** — see "One offset operator" above. |
+| Section-properties backend | Defaults to `hybrid`, i.e. constructive polygons integrated by shoelace, which is exact for a polygon, with the quadtree as cross-check. Area parity against dense-grid SDF occupancy is already instrumented in `docs/reports/DUAL_REP_ACCEPTANCE.md`. |
 
 ### The trap this class hides
 
@@ -624,3 +642,173 @@ mesher will accept, not ahead of it.
 Bounded for now by `test_cap_web_interior_junction_shared_node.py`, whose cap-side
 assertion is set at exactly this 1 µm window — so the residual cannot grow
 without failing a test.
+
+---
+
+## SG-008
+
+**Airfoil polygonisation is the package's real exactness floor, and is un-budgeted**
+
+**Status:** Open — needs a definitional decision before it needs a fix
+**Found:** 2026-08-30
+**Area:** `sdf/airfoil.py` — `AirfoilSDF.from_naca(..., n_points=...)`, and every
+call site that picks `n_points`
+
+### Symptom
+
+Junctions are now exact to 0.000 µm against a shape that is itself tens of
+microns away from the aerofoil it claims to be. Nothing in the package measures,
+pins or documents that gap, and `n_points` is chosen per call site by habit.
+
+### Evidence
+
+Maximum deviation of the airfoil polygon from the analytic NACA 2412 curve,
+1 m chord, in the leading-edge region (x/c < 0.02) where curvature is highest:
+
+| `n_points` | LE deviation |
+|---|---|
+| 100 | 246.8 µm |
+| **200** (the usual default) | **62.1 µm** |
+| 400 | 15.5 µm |
+| 800 | 3.9 µm |
+
+Clean second-order convergence — halving the step quarters the error, exactly as
+a chord approximation of a curve should. So this is discretisation, not a defect
+in the sampling.
+
+For scale, 62 µm is **~1 % of a 6 mm skin gauge**, at the most curved part of the
+skin, and roughly 70x the worst junction error that remains anywhere else in the
+package (SG-007, 0.89 µm).
+
+Measurements away from the LE are dominated by a trailing-edge closure
+difference between the SDF's airfoil and an open-TE analytic reference; that
+part is a reference artefact, not a package error, and was excluded.
+
+### Why this is a decision before it is a fix
+
+Two readings are defensible and they lead to different work:
+
+1. **The polygon *is* the section.** The package's input contract is a
+   discretised aerofoil, everything downstream is exact with respect to it, and
+   62 µm is not an error at all. Then the fix is documentation: say so plainly,
+   because the current silence lets a reader assume the analytic curve is meant.
+2. **The polygon approximates the aerofoil.** Then `n_points` needs to come from
+   a stated LE-error budget rather than habit, with a convergence test pinning
+   it, and the budget should be justified against skin gauge rather than chosen
+   for roundness.
+
+Until that is settled, quoting micron-level junction figures without this
+caveat overstates what the geometry knows.
+
+---
+
+## SG-009
+
+**Junction detection reads sampled polylines, so exactness fights detectability**
+
+**Status:** Open — architectural; no live defect
+**Found:** 2026-08-30, generalising SG-005
+**Area:** `topology/` and `midlines/` junction path
+
+### Symptom
+
+Making a junction exact destroys the evidence used to find it. Placing a shared
+node at a crossing turns two crossing polylines into two *touching* polylines,
+and `intersect_open_polylines_2d` — a strict-interior detector — then returns
+nothing.
+
+### Evidence
+
+This has now bitten twice, in opposite directions:
+
+- SG-005's first attempt inserted the web node at emit, which made the cap side
+  undetectable and swapped the defect (`4D-F`: web 1570 µm → 0, cap 0 → 1056 µm).
+- After SG-005 was fixed correctly, re-running the production detector over the
+  prepared strips finds **zero** interior crossings across 81 configurations —
+  correct behaviour that looks identical to "the pass did nothing".
+
+The second point is the sharper problem: it means neither a verification script
+nor a regression test may use the production detector, because such a test passes
+on a correct fix *and* on one that deleted every junction.
+`test_cap_web_interior_junction_shared_node.py` works around it by locating
+crossings from the web axis instead, and says so at length.
+
+### Root cause
+
+Junctions are recovered from **sampled polylines** rather than solved from the
+primitives that generated them. A web is a straight axis and a cap is an offset
+locus; their intersection is computable directly, and neither participant's
+sampling should be able to hide it.
+
+### Proposed direction
+
+Generalise what SG-002 and SG-004 already do for the web foot and the cap end:
+solve each junction from the analytic primitives (web axis line × offset ring)
+and then sample both strips *through* the solved point, instead of sampling first
+and intersecting afterwards. That makes SG-005's fix the rule rather than a
+guarded special case, and removes the class of trap above rather than
+documenting around it each time.
+
+Filed rather than done because it touches the emit path for every component and
+should not be attempted while SG-008 is unresolved — there is little value in a
+more exact junction solver sitting on an un-budgeted aerofoil.
+
+---
+
+## SG-010
+
+**The surface dividing suction from pressure spar caps is a 33-point polyline**
+
+**Status:** Open
+**Found:** 2026-08-30
+**Area:** `sections/cap_feasibility.py` → `constructive/emitters.py::_camber_clip`
+and `sections/components/outer_skin.py::_camber_side_split`
+
+### Symptom
+
+Which material belongs to the suction cap and which to the pressure cap is
+decided by a coarse sampled polyline standing in for the cavity midline.
+
+### Evidence
+
+`cap_feasibility_clamp` samples the cavity depth at `n_samples = 33` stations
+across the cap band and returns those stations' midpoints as
+`info["camber_xy"]`. That 33-point polyline is then used directly as a clip
+boundary — by `_camber_clip` in the constructive path and by
+`_camber_side_split` in the SDF path.
+
+Deviation of the 33-segment polyline from a densely sampled cavity midline,
+NACA 2412, 6 mm skin, band x/c 0.15–0.65:
+
+| Chord | Deviation |
+|---|---|
+| 1.0 m | **18.56 µm** |
+| 0.241 m | 4.47 µm |
+
+The error is a chord approximation of a curve, so it is systematic rather than
+oscillating: it biases area consistently from one cap to the other rather than
+cancelling. On a 14 mm cap that is ~0.13 % of cap height.
+
+Both representations consume the *same* 33 points, so the constructive and SDF
+paths stay consistent with each other — this is not a dual-rep divergence. Both
+are simply that far from the true midline.
+
+Note what is **not** wrong here: the `bisection_iters=0` shortcut used to build
+these points costs nothing (0.00 µm — see "Cleared by measurement"). The sampling
+density is the whole of the error.
+
+### Why it matters less than it looks, and still matters
+
+The cap **mid-surfaces** exported for shell meshing come from
+`_airfoil_offset_arc`, i.e. the offset ring, not from this polyline. So SG-010
+does not touch the strip geometry that SG-001 to SG-005 were about. It affects
+the cap **solids** — areas, and therefore section properties and mass
+distribution.
+
+### Proposed fix
+
+`n_samples` is a resolution knob on a locus that can be evaluated at any x, so
+the honest options are to derive it from a stated tolerance, or to stop
+approximating and clip against an evaluated midline. Either way it should be
+decided together with SG-008, since both are the same question — what resolution
+is the section entitled to claim.
