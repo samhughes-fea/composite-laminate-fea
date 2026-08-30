@@ -42,9 +42,9 @@ Or install editable (`pip install -e .`) and run the same path.
 
 ## See also
 
-- Progressive guide: [`../docs/quickstart.md`](../docs/quickstart.md)
-- Call recipes: [`../docs/caller_patterns.md`](../docs/caller_patterns.md)
-- Anatomy on a figure: [`../docs/anatomy_on_a_figure.md`](../docs/anatomy_on_a_figure.md)
-- Feasibility / drops: [`../docs/feasibility_and_drops.md`](../docs/feasibility_and_drops.md)
-- Geometry → mesh: [`../docs/geometry_to_mesh.md`](../docs/geometry_to_mesh.md)
+- Progressive guide: [`../docs/guides/quickstart.md`](../docs/guides/quickstart.md)
+- Call recipes: [`../docs/guides/caller_patterns.md`](../docs/guides/caller_patterns.md)
+- Anatomy on a figure: [`../docs/guides/anatomy_on_a_figure.md`](../docs/guides/anatomy_on_a_figure.md)
+- Feasibility / drops: [`../docs/guides/feasibility_and_drops.md`](../docs/guides/feasibility_and_drops.md)
+- Geometry → mesh: [`../docs/guides/geometry_to_mesh.md`](../docs/guides/geometry_to_mesh.md)
 - Figure demos: [`../visualisation/demos/`](../visualisation/demos/README.md)

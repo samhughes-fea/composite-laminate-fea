@@ -58,7 +58,7 @@ alignment is `"chord_normal"` or `"flapwise"`.
 between webs.
 
 **Inserts:** residual tip solids; props keep them on the SDF path
-([`../../docs/DUAL_REP_ACCEPTANCE.md`](../../docs/DUAL_REP_ACCEPTANCE.md)).
+([`../../docs/reports/DUAL_REP_ACCEPTANCE.md`](../../docs/reports/DUAL_REP_ACCEPTANCE.md)).
 
 ## Organisation
 

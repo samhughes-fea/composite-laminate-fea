@@ -5,7 +5,7 @@
 For mature labels (skin, webs, caps, cores), builds explicit boundary polygons
 from the same recipes and integrates area / second moments by shoelace. LE/TE
 inserts remain on the SDF residual path. Parity:
-[`../docs/DUAL_REP_ACCEPTANCE.md`](../docs/DUAL_REP_ACCEPTANCE.md). Packaging:
+[`../docs/reports/DUAL_REP_ACCEPTANCE.md`](../docs/reports/DUAL_REP_ACCEPTANCE.md). Packaging:
 [`../props_emit/`](../props_emit/README.md).
 
 Code names such as `emit_laminate_polygons` / `is_laminate_label` mean
@@ -52,4 +52,4 @@ flowchart LR
 ## See also
 
 - [`../props_emit/`](../props_emit/README.md)
-- [`../docs/DUAL_REP_ACCEPTANCE.md`](../docs/DUAL_REP_ACCEPTANCE.md)
+- [`../docs/reports/DUAL_REP_ACCEPTANCE.md`](../docs/reports/DUAL_REP_ACCEPTANCE.md)

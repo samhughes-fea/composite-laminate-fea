@@ -38,13 +38,8 @@ from _ensure_repo_path import ensure_repo_path  # noqa: E402  (script-local help
 
 _REPO = ensure_repo_path()
 
-from blade_structure_precompute.examples._shared import (  # noqa: E402
-    load_blade_structure_inputs,
-)
-from blade_structure_precompute.module.feasibility import Feasibility  # noqa: E402
-from blade_structure_precompute.module.internal_force import InternalForce  # noqa: E402
-from blade_structure_precompute.module.scale import Scale  # noqa: E402
-from blade_structure_precompute.module.section_selection.processing.shell_station.scale_adapter import (  # noqa: E402
+from spanwise_web_anchors_shared import build_stations as _build_spanwise_stations  # noqa: E402
+from blade_structure_precompute.module.section_selection.processing.adapters.scale_adapter import (  # noqa: E402
     airfoil_sdf_from_station,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry import (  # noqa: E402
@@ -73,58 +68,13 @@ OUT_DIR = Path(__file__).resolve().parents[1] / "output" / "spanwise_web_anchors
 
 
 def build_stations() -> list[dict[str, Any]]:
-    """Scale -> InternalForce -> Feasibility, then per-station coords + metadata.
-
-    Feasibility is run because it applies the t/c thickening back onto Scale
-    (``set_feasible_geometry``); measuring the un-thickened geometry would not
-    describe what section selection actually sees.
-    """
-    cot = _REPO / "cotide_data_interfaces"
-    inputs = load_blade_structure_inputs(
-        rotor_dir=cot / ROTOR,
-        naca_file=cot / "NACA_63-415.dat",
+    """Return spanwise station data via the shared loader helper."""
+    return _build_spanwise_stations(
         repo_root=_REPO,
+        rotor=ROTOR,
+        materials=MATERIALS,
         structural_system_key="5D-F",
-        component_materials=MATERIALS,
-        flap_tip_disp_ratio=0.1,
-        apply_benchmark_64_station_grid=True,
     )
-    scale = Scale(
-        blade_geometry=inputs.blade_geometry,
-        sampling_distribution_parameters=inputs.sampling_distribution_parameters,
-    )
-    scale.execute()
-    ifm = InternalForce(scaling=scale, loading=inputs.loading)
-    ifm.execute()
-    Feasibility(
-        internal_force=ifm,
-        scaling=scale,
-        structural_system_parameters=inputs.structural_system_parameters,
-        apply_thickening=True,
-        tc_iteration_mode="thicken_only",
-        fos=2.5,
-        root_blend_mode="off",
-        smooth_section_depth=False,
-    ).execute()
-
-    scale_set = scale.get_scale_set()
-    geom = scale_set.get_outer_loop_geometry_S_for_analysis()
-    counts = scale_set.outer_loop_point_counts
-    rows = scale_set.primary_bin.rows
-
-    stations = []
-    for i, row in enumerate(rows):
-        n = int(counts[i])
-        stations.append(
-            {
-                "idx": int(row.station_index),
-                "zL": float(row.zL),
-                "chord": float(row.chord),
-                "coords": np.asarray(geom[i, :n, :], dtype=float),
-                "metadata": {"chord": float(row.chord), "twist_deg": float(row.twist)},
-            }
-        )
-    return stations
 
 
 def probe_layout(  # noqa: C901 - a measurement script, linear by design

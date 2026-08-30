@@ -6,13 +6,25 @@ Guides and reference (overview: package README).
 
 ## Table of contents
 
-1. [Doc map](#doc-map)
-2. [Examples](#examples)
-3. [Guides](#guides)
-4. [Reference](#reference)
-5. [Module pages](#module-pages)
+1. [Directory map](#directory-map)
+2. [Doc map](#doc-map)
+3. [Examples](#examples)
+4. [Guides](#guides)
+5. [Reference](#reference)
+6. [Reports](#reports)
+7. [Module pages](#module-pages)
 
 ---
+
+## Directory map
+
+- `guides/` — task-oriented walkthroughs: how to call the package and what to do next.
+- `reference/` — what the identifiers and layouts *are*; look-up material.
+- `reports/` — engineering records: acceptance narratives and performance findings.
+- `presentation/` — presentation pages (L2 presentation location).
+- `bug_log.md` — required at this level by
+  [`DOCUMENTATION_STANDARDS`](../../../../../docs/conventions/documentation/DOCUMENTATION_STANDARDS.md);
+  do not move it into a subdirectory.
 
 ## Doc map
 
@@ -21,13 +33,17 @@ flowchart TB
   PkgReadme[package_README] --> Guides[guides]
   PkgReadme --> Examples[examples_scripts]
   PkgReadme --> Reference[reference]
+  PkgReadme --> Reports[reports]
   PkgReadme --> Modules[module_READMEs]
   Guides --> Quickstart[quickstart]
-  Guides --> Gallery[structural_systems_gallery]
   Guides --> Patterns[caller_patterns]
   Guides --> Anatomy[anatomy_on_a_figure]
   Guides --> Feas[feasibility_and_drops]
   Guides --> Handoff[geometry_to_mesh]
+  Reference --> Taxonomy[system_type_xyz_taxonomy]
+  Reference --> Gallery[structural_systems_gallery]
+  Reports --> DualRep[DUAL_REP_ACCEPTANCE]
+  Reports --> Perf[PERFORMANCE_WORK_SUMMARY]
   Examples --> Quickstart
   Examples --> Handoff
   Modules --> Api[api]
@@ -51,23 +67,27 @@ Runnable teaching scripts (not plot demos):
 
 | Doc | Contents |
 |-----|----------|
-| [`quickstart.md`](quickstart.md) | Progressive paths: first call → result → layout → sizing → spanwise webs |
-| [`structural_systems_gallery.md`](structural_systems_gallery.md) | All 40 `SYSTEM_TYPE_KEYS` with demo figures |
-| [`caller_patterns.md`](caller_patterns.md) | Simple build, sizing loop, spanwise webs |
-| [`anatomy_on_a_figure.md`](anatomy_on_a_figure.md) | Labels / midlines / cells on a `"2D-F"` figure |
-| [`feasibility_and_drops.md`](feasibility_and_drops.md) | `InfeasibleSectionGeometry` vs dropped webs; `0A`/`0B` handoff |
-| [`geometry_to_mesh.md`](geometry_to_mesh.md) | Midlines → `ShellMeshInputs` → `section_mesh` |
+| [`guides/quickstart.md`](guides/quickstart.md) | Progressive paths: first call → result → layout → sizing → spanwise webs |
+| [`guides/caller_patterns.md`](guides/caller_patterns.md) | Simple build, sizing loop, spanwise webs |
+| [`guides/anatomy_on_a_figure.md`](guides/anatomy_on_a_figure.md) | Labels / midlines / cells on a `"2D-F"` figure |
+| [`guides/feasibility_and_drops.md`](guides/feasibility_and_drops.md) | `InfeasibleSectionGeometry` vs dropped webs; `0A`/`0B` handoff |
+| [`guides/geometry_to_mesh.md`](guides/geometry_to_mesh.md) | Midlines → `ShellMeshInputs` → `section_mesh` |
 
 ## Reference
 
 | Doc | Contents |
 |-----|----------|
-| [`system_type_xyz_taxonomy.md`](system_type_xyz_taxonomy.md) | Layout-id decode (`"2D-F"` → web count, cap family, orientation) |
-| [`figures/`](figures/README.md) | Checked-in figures and regenerate commands |
-| [`DUAL_REP_ACCEPTANCE.md`](DUAL_REP_ACCEPTANCE.md) | Polygon vs SDF area acceptance |
-| [`PERFORMANCE_WORK_SUMMARY.md`](PERFORMANCE_WORK_SUMMARY.md) | Hybrid / quadtree performance notes |
-| [`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md) | SG-009 design spike: post-resample axis x cap junctions |
-| [`bug_log.md`](bug_log.md) | Debug log |
+| [`reference/system_type_xyz_taxonomy.md`](reference/system_type_xyz_taxonomy.md) | Layout-id decode (`"2D-F"` → web count, cap family, orientation) |
+| [`reference/structural_systems_gallery.md`](reference/structural_systems_gallery.md) | All 40 `SYSTEM_TYPE_KEYS` with demo figures |
+
+## Reports
+
+| Doc | Contents |
+|-----|----------|
+| [`reports/DUAL_REP_ACCEPTANCE.md`](reports/DUAL_REP_ACCEPTANCE.md) | Polygon vs SDF area acceptance |
+| [`reports/PERFORMANCE_WORK_SUMMARY.md`](reports/PERFORMANCE_WORK_SUMMARY.md) | Hybrid / quadtree performance notes |
+| [`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md) | SG-009 design spike — post-resample axis×cap junctions |
+| [`bug_log.md`](bug_log.md) | Debug log — junction/tolerance findings and the standing invariant |
 
 ## Module pages
 

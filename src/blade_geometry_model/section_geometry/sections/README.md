@@ -95,6 +95,6 @@ Part recipes (skin, web, cap, core, inserts) and OML/IML:
 ## See also
 
 - [`components/README.md`](components/README.md)
-- [`../docs/system_type_xyz_taxonomy.md`](../docs/system_type_xyz_taxonomy.md)
+- [`../docs/reference/system_type_xyz_taxonomy.md`](../docs/reference/system_type_xyz_taxonomy.md)
 - [`../midlines/`](../midlines/README.md)
 - [`../constructive/`](../constructive/README.md)

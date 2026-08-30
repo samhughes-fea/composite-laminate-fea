@@ -5,7 +5,7 @@
 Resolves a layout id such as `"2D-F"` (web count · spar-cap family ·
 orientation) to a frozen `SystemLayoutSpec`, and owns the taper-time web-drop
 cascade. Solid assembly is [`../sections/`](../sections/README.md). Decode:
-[`../docs/system_type_xyz_taxonomy.md`](../docs/system_type_xyz_taxonomy.md).
+[`../docs/reference/system_type_xyz_taxonomy.md`](../docs/reference/system_type_xyz_taxonomy.md).
 
 Absolute web x-offsets [m from LE] may come from spanwise anchoring. Webs
 whose local cavity is too shallow are **dropped**, not slid.
@@ -72,5 +72,5 @@ Station resolve is orchestrated from [`../api/`](../api/README.md)
 
 ## See also
 
-- [`../docs/system_type_xyz_taxonomy.md`](../docs/system_type_xyz_taxonomy.md)
+- [`../docs/reference/system_type_xyz_taxonomy.md`](../docs/reference/system_type_xyz_taxonomy.md)
 - [`../sections/`](../sections/README.md)

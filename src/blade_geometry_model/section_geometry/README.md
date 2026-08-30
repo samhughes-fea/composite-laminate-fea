@@ -77,7 +77,7 @@ result = SectionGeometryRunner(
 the test surface. Import from the package barrel. Returns
 `SectionGeometryResult` or raises (e.g. `InfeasibleSectionGeometry`).
 
-Guided paths: [`docs/quickstart.md`](docs/quickstart.md).
+Guided paths: [`docs/guides/quickstart.md`](docs/guides/quickstart.md).
 Runnable twins: [`examples/`](examples/README.md).
 
 ### Using the result
@@ -116,20 +116,25 @@ resolution = SectionGeometryRunner(
 | Step | Where |
 |------|--------|
 | First station (`01`–`05`) | [`examples/`](examples/README.md) |
-| Progressive recipes | [`docs/quickstart.md`](docs/quickstart.md) |
-| All 40 layout figures | [`docs/structural_systems_gallery.md`](docs/structural_systems_gallery.md) |
-| Labels on a `"2D-F"` figure | [`docs/anatomy_on_a_figure.md`](docs/anatomy_on_a_figure.md) |
-| Drops / infeasible / `0A`/`0B` | [`docs/feasibility_and_drops.md`](docs/feasibility_and_drops.md) |
-| Midlines → mesh | [`docs/geometry_to_mesh.md`](docs/geometry_to_mesh.md) |
+| Progressive recipes | [`docs/guides/quickstart.md`](docs/guides/quickstart.md) |
+| All 40 layout figures | [`docs/reference/structural_systems_gallery.md`](docs/reference/structural_systems_gallery.md) |
+| Labels on a `"2D-F"` figure | [`docs/guides/anatomy_on_a_figure.md`](docs/guides/anatomy_on_a_figure.md) |
+| Drops / infeasible / `0A`/`0B` | [`docs/guides/feasibility_and_drops.md`](docs/guides/feasibility_and_drops.md) |
+| Midlines → mesh | [`docs/guides/geometry_to_mesh.md`](docs/guides/geometry_to_mesh.md) |
 
 ## Example figure
 
 A twin-web family-D section (layout `"2D-F"`):
 
-![2D-F structural family grid](docs/figures/2D-F.png)
+![2D-F structural family grid](visualisation/output/structural_family_grids/2D-F.png)
 
-Checked-in under `docs/figures/` (`visualisation/output/` is gitignored).
-Regenerate: [`docs/figures/README.md`](docs/figures/README.md).
+Figures on this page are **generated, not checked in** —
+`visualisation/output/` is gitignored, so they render locally once the gallery
+demo has been run and are absent in a fresh clone:
+
+```bash
+python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py
+```
 
 ## Structural systems
 
@@ -139,15 +144,15 @@ orientation. Teasers by web count **X** (≠ spar-cap family **Y**):
 
 | `0A` — 0 webs, no caps | `1A-F` — 1 web, no caps, flapwise | `2D-F` — 2 webs, box caps, flapwise |
 |------|-------|-------|
-| ![0A](docs/figures/structural_systems/0A.png) | ![1A-F](docs/figures/structural_systems/1A-F.png) | ![2D-F](docs/figures/structural_systems/2D-F.png) |
+| ![0A](visualisation/output/structural_family_grids/0A.png) | ![1A-F](visualisation/output/structural_family_grids/1A-F.png) | ![2D-F](visualisation/output/structural_family_grids/2D-F.png) |
 
 | `3B-F` — 3 webs, single band | `4C-F` — 4 webs, discrete caps | `5A-F` — 5 webs, no caps |
 |--------|-------|-------|
-| ![3B-F](docs/figures/structural_systems/3B-F.png) | ![4C-F](docs/figures/structural_systems/4C-F.png) | ![5A-F](docs/figures/structural_systems/5A-F.png) |
+| ![3B-F](visualisation/output/structural_family_grids/3B-F.png) | ![4C-F](visualisation/output/structural_family_grids/4C-F.png) | ![5A-F](visualisation/output/structural_family_grids/5A-F.png) |
 
 Full catalogue with every key:
-[`docs/structural_systems_gallery.md`](docs/structural_systems_gallery.md).
-Id decode: [`docs/system_type_xyz_taxonomy.md`](docs/system_type_xyz_taxonomy.md).
+[`docs/reference/structural_systems_gallery.md`](docs/reference/structural_systems_gallery.md).
+Id decode: [`docs/reference/system_type_xyz_taxonomy.md`](docs/reference/system_type_xyz_taxonomy.md).
 
 ## Pipeline position
 
@@ -252,13 +257,13 @@ spar-cap family (`StructuralFamily` A–D), **Z** = web orientation.
 `resolve_system_type` returns a frozen `SystemLayoutSpec`. On taper, webs that
 do not fit the local cavity are **dropped**, not shifted
 ([`layout/`](layout/README.md),
-[`docs/system_type_xyz_taxonomy.md`](docs/system_type_xyz_taxonomy.md)).
+[`docs/reference/system_type_xyz_taxonomy.md`](docs/reference/system_type_xyz_taxonomy.md)).
 
 **CN** = chord-normal in the untwisted section; **F** = flapwise (vertical in
 the twisted blade frame). Compare
-[`2D-CN`](docs/figures/structural_systems/2D-CN.png) vs
-[`2D-F`](docs/figures/structural_systems/2D-F.png). Full set:
-[`structural systems gallery`](docs/structural_systems_gallery.md).
+[`2D-CN`](visualisation/output/structural_family_grids/2D-CN.png) vs
+[`2D-F`](visualisation/output/structural_family_grids/2D-F.png). Full set:
+[`structural systems gallery`](docs/reference/structural_systems_gallery.md).
 
 ### Optional outputs
 
@@ -433,18 +438,24 @@ This is per-region 2-D geometry, not beam `EA` / `EI` / `GJ`
 - Sizing: resolve layout once, pass `resolution=` on later builds.
 - Env: `SECTION_GEOMETRY_PROPS_BACKEND=hybrid|quadtree|grid`;
   `SECTION_GEOMETRY_PROFILE=1` → `result.stage_timings`.
+- **Exactness contract (SG-008).** The aerofoil input is a discrete polygon
+  (`AirfoilSDF.vertices`). Everything downstream — offsets, midlines, junctions,
+  solids — is exact with respect to that polyline. Default NACA
+  `n_points=200` is ~62 µm from the analytic LE at 1 m chord; that gap is
+  discretisation of the generator, not a junction bug. See
+  [`docs/bug_log.md`](docs/bug_log.md) SG-008 and [`sdf/README.md`](sdf/README.md).
 
 ## See also
 
 - Module pages linked under [Package structure](#package-structure)
 - [`examples/`](examples/README.md) — runnable teaching scripts `01`–`05`
-- [`docs/quickstart.md`](docs/quickstart.md) — progressive guided paths
-- [`docs/structural_systems_gallery.md`](docs/structural_systems_gallery.md) — all 40 layout figures
-- [`docs/anatomy_on_a_figure.md`](docs/anatomy_on_a_figure.md) — labels / midlines / cells on a figure
-- [`docs/feasibility_and_drops.md`](docs/feasibility_and_drops.md) — drops vs `InfeasibleSectionGeometry`
-- [`docs/geometry_to_mesh.md`](docs/geometry_to_mesh.md) — midlines → `ShellMeshInputs`
+- [`docs/guides/quickstart.md`](docs/guides/quickstart.md) — progressive guided paths
+- [`docs/reference/structural_systems_gallery.md`](docs/reference/structural_systems_gallery.md) — all 40 layout figures
+- [`docs/guides/anatomy_on_a_figure.md`](docs/guides/anatomy_on_a_figure.md) — labels / midlines / cells on a figure
+- [`docs/guides/feasibility_and_drops.md`](docs/guides/feasibility_and_drops.md) — drops vs `InfeasibleSectionGeometry`
+- [`docs/guides/geometry_to_mesh.md`](docs/guides/geometry_to_mesh.md) — midlines → `ShellMeshInputs`
 - [`api/`](api/README.md) — caller parameters and feasibility
-- [`docs/caller_patterns.md`](docs/caller_patterns.md) — sizing loop and spanwise webs
+- [`docs/guides/caller_patterns.md`](docs/guides/caller_patterns.md) — sizing loop and spanwise webs
 - [`sections/components/`](sections/components/README.md) — skin / web / cap recipes
 - [`docs/`](docs/README.md) — docs index (taxonomy, patterns, gallery)
 - Tests: [`tests/`](tests/README.md) —

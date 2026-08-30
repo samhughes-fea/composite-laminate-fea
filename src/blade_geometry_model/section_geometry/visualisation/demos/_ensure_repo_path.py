@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -19,9 +20,28 @@ def ensure_repo_path() -> Path:
             s = str(p)
             if s not in sys.path:
                 sys.path.insert(0, s)
+            _maybe_enable_plot_debug(p)
             return p
     raise RuntimeError(
         "Could not find the blade_structure_utilities package. Clone the repository and run this "
         "script from inside it, or install the project in editable mode "
         "(from the repo root: pip install -e .)."
     )
+
+
+def _maybe_enable_plot_debug(repo_root: Path) -> None:
+    """Enable optional plot-debug tracing for demo scripts."""
+    dbg_path = Path(__file__).resolve().parent / "_plot_debug.py"
+    if not dbg_path.is_file():
+        return
+    try:
+        spec = importlib.util.spec_from_file_location("_plot_debug", dbg_path)
+        if spec is None or spec.loader is None:
+            return
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        fn = getattr(mod, "activate_plot_debug_if_enabled", None)
+        if callable(fn):
+            fn(repo_root)
+    except Exception as exc:
+        print(f"[plot-debug] setup skipped: {exc}")

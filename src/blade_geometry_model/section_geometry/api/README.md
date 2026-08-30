@@ -110,4 +110,4 @@ flowchart LR
 
 - [`../layout/`](../layout/README.md) — layout resolve rules
 - [`../types/`](../types/README.md) — public aliases
-- [`../docs/caller_patterns.md`](../docs/caller_patterns.md) — sizing / spanwise patterns
+- [`../docs/guides/caller_patterns.md`](../docs/guides/caller_patterns.md) — sizing / spanwise patterns
