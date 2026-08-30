@@ -456,8 +456,10 @@ xfail to xpass (`test_untied_cap_s_and_q_diverge`,
 `test_untied_cap_fi_diverges_so_the_test_discriminates`,
 `test_connected_components_converge_regardless_of_cap_ties`), all tagged
 [BL-014](../../../../../docs/bug_log.md#bl-014) in the repo-root log. They are
-`strict=False` and documented as execution-context dependent, so this is a signal
-to investigate BL-014, not a claim it is resolved.
+`strict=False` and documented as execution-context dependent. That is a signal
+to run the **BL-014 triage track** (isolation-vs-suite polluter hunt — see
+[BL-014 triage](../../../../../docs/bug_log.md#bl-014-triage)), not a claim the
+tied-web Hashin FE defect is resolved.
 
 ---
 
@@ -780,7 +782,8 @@ Design record:
 - `test_cap_web_interior_junction_shared_node.py` — LAYOUTS × twist × chord, 1 nm
   gaps on both strips; oracle is the same axis×cap primitive.
 - Related web-foot / shell-strip / cap-resample fidelity suites green.
-- BL-014 and pre-sample analytic offset-ring × axis left out of scope.
+- BL-014 triage / tied-web Hashin FI (out of scope for this rewrite).
+- Pre-sample analytic offset-ring × axis left out of scope.
 
 ---
 
