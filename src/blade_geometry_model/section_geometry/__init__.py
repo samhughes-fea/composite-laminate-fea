@@ -1,21 +1,14 @@
-"""Section geometry **worker** — use-case-agnostic implicit section kernel.
-
-Owns the nested CSG toolbox (:mod:`.sdf`). Emits props / midlines into
-:mod:`blade_structure_utilities.geometry_utilities.section_contract` DTOs.
-Sizing and fatigue orchestration call this package; they do not own it.
-
-Entrypoints (prefer the first): ``SectionGeometryRunner`` →
-``build_section_geometry`` → ``build_section_with_thicknesses`` (assemble only)
-→ ``build_section_view`` (demos / properties).
-"""
+"""Section geometry worker package public barrel."""
 
 from .api import (
     SectionGeometryResult,
     SectionGeometryRunner,
+    SectionPropertiesMeta,
     StationLayoutResolution,
     build_section_geometry,
     build_section_view,
     build_section_with_thicknesses,
+    resolve_station_layout,
     resolve_system_type,
     section_geometry_prep_key,
 )
@@ -46,6 +39,7 @@ __author__ = "Sam Hughes"
 __all__ = [
     "SectionGeometryResult",
     "SectionGeometryRunner",
+    "SectionPropertiesMeta",
     "StationLayoutResolution",
     "build_section_geometry",
     "build_section_with_thicknesses",
@@ -70,6 +64,7 @@ __all__ = [
     "pitch_axis_x_from_le",
     "max_thickness_chord_x",
     "build_section_view",
+    "resolve_station_layout",
     "resolve_system_type",
     "SYSTEM_TYPE_KEYS",
     "SystemLayoutSpec",

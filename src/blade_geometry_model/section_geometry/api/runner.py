@@ -1,7 +1,7 @@
 """Geometry worker runner: layout resolution + section build.
 
 One lifecycle seam for the geometry stage, per
-`docs/conventions/API_STANDARDS.md` § Worker runners. Wraps
+`docs/conventions/api/API_STANDARDS.md` § Worker runners. Wraps
 :func:`resolve_station_layout` and :func:`build_section_geometry`; both stay
 exported and remain the unit-test surface.
 

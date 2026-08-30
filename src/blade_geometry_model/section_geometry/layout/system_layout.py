@@ -1,7 +1,7 @@
 """SystemType-style layout keys → frozen layout specs (SDF-first; no Shapely).
 
 Registry dict keys are the **compact** ``SystemType{X}{Y}-{Z}`` tokens from
-``blade_precompute/blade_structure_utilities/geometry_utilities/section_geometry/docs/system_type_xyz_taxonomy.md`` (e.g.
+``blade_precompute/blade_structure_utilities/geometry_utilities/section_geometry/docs/reference/system_type_xyz_taxonomy.md`` (e.g.
 ``2D-CN``, ``2D-F``). Middle letter is taxonomy **Y** (``A``/``B``/``C``/``D``).
 Pass these strings to :func:`resolve_system_type`.
 """
