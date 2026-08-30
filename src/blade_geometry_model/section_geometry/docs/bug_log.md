@@ -30,8 +30,9 @@ Deviations are stated per entry.
 | [SG-002](#sg-002) | Shear-web midline kinks at the foot during junction preparation | **Fixed** at the root (emit extent) |
 | [SG-003](#sg-003) | Band-cap (**B**) and discrete-cap (**C**) ends are relocated onto the skin | **Fixed** (no relocation at all) |
 | [SG-004](#sg-004) | Cap–web junction has no shared node at a cap **end** | **Fixed** at emit |
-| [SG-005](#sg-005) | Interior cap–web T-junctions have a node on the **cap** side only | **Open** — latent, conforms on mesher tolerance |
+| [SG-005](#sg-005) | Interior cap–web T-junctions have a node on the **cap** side only | **Fixed** — one solved crossing inserted into both strips |
 | [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Fixed** — plot mirrors the resampler; the constant is gone |
+| [SG-007](#sg-007) | `_CAP_WEB_JUNCTION_MERGE_ARC_M` collapses distinct crossings on a short cap | **Open** — 0.89 µm residual, pre-dates SG-005 |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -49,7 +50,7 @@ class of bug. Status after applying the invariant to both paths:
 | web foot ← `point_to_open_polyline_nearest` | relocated the foot | **relocation gone** — web emits to the skin mid-surface; the call survives in `split_skin_at_junctions` but only to read an arc length |
 | cap end ← `point_to_open_polyline_nearest` + `_CAP_ENDPOINT_ON_WEB_TOL_M` | relocated free ends onto the skin | **gone** — caps pass through `skin_split` untouched, and the constant and its last consumer have since been deleted (SG-004) |
 | cap **end** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` (6 mm at 1 m chord) | junction conformed on ~4 mm of margin | **gone** — web emits a vertex at each cap-end junction, coincident to 0.000 µm |
-| cap **interior** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` | junction conformed on ~4 mm of margin | **still there** — SG-005 |
+| cap **interior** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` | junction conformed on ~4 mm of margin | **gone** — one solved crossing is inserted into both strips (SG-005) |
 | cap resample ← `_SKIN_RAY_CAP_BBOX_MARGIN_M` | proximity box with a fixed margin | **gone** — skin vertices selected by declared suction/pressure side, in the resampler and in the plot that draws it; the constant is deleted (SG-001, SG-006) |
 
 The merge tolerance that decides when two skin cuts are one cut is *indexing*,
@@ -90,7 +91,7 @@ Deleted during the 2026-08-30 cleanup, 0 references each: `_CAP_ENDPOINT_ON_WEB_
 `ShellStripTopologySpec.skin_ray_cap_bbox_margin_m`, and the
 `skin_ray_cap_bbox_margin_m` parameter of `shell_mesh_inputs_from_section`.
 
-**Still open:** SG-005.
+**Still open:** SG-007.
 
 ### One offset operator (hardened 2026-08-30)
 
@@ -130,7 +131,8 @@ quantity that is knowable exactly.
 | `_SKIN_RAY_CAP_BBOX_MARGIN_M` proximity box | fixed — declared surface side (SG-001) |
 | `_CAP_ENDPOINT_ON_WEB_TOL_M` deciding whether to relocate a cap end | fixed, then **deleted** — nothing relocates, so nothing decides (SG-003, SG-004) |
 | web foot ← nearest-point projection | fixed — emit extent corrected (SG-002) |
-| cap↔web node ← mesher `ENDPOINT_TOL_FRAC` | cap **ends** fixed (SG-004); cap **interiors** open (SG-005) |
+| cap↔web node ← mesher `ENDPOINT_TOL_FRAC` | fixed — cap **ends** at emit (SG-004), cap **interiors** from one solved crossing (SG-005) |
+| `_CAP_WEB_JUNCTION_MERGE_ARC_M` deciding whether two crossings are one | **open** — its absolute floor discards a real crossing on a short cap (SG-007) |
 
 **(b) Correctly scaled design rules — not numerical tolerances at all.**
 
@@ -146,9 +148,13 @@ they are.
 - `abs(twist) > 1e-10`, `area > 1e-16`, `1e-9` ring-closure checks,
   `_MIN_SEGMENT_LENGTH_M = 1e-12`, `_SKIN_RAY_T_MIN_M = 1e-9` — floating-point
   is-zero and degenerate-geometry guards.
-- `_CAP_WEB_JUNCTION_MERGE_ARC_M` and `vertex_coincide_tol_m` in
-  `insert_cap_web_interior_junctions` — de-duplication of inserted vertices,
-  not classification of geometry.
+- `vertex_coincide_tol_m` in `insert_cap_web_interior_junctions` — asks whether a
+  strip already has the node, which is a de-duplication question, not a
+  classification of geometry.
+
+`_CAP_WEB_JUNCTION_MERGE_ARC_M` was listed here on the same grounds until SG-007
+showed it is not: its absolute floor decides that two distinct crossings are one,
+which *is* classification. Moved to (a).
 
 **(d) Scale-dependent but safe — fixed anyway.**
 
@@ -433,7 +439,7 @@ to investigate BL-014, not a claim it is resolved.
 
 **Interior cap–web T-junctions have a node on the cap side only**
 
-**Status:** Open — latent, not a live defect
+**Status:** Fixed
 **Found:** 2026-08-30
 **Area:** `topology/cap_web_junctions.py` — `insert_cap_web_interior_junctions`
 
@@ -444,8 +450,7 @@ a node at the crossing.
 
 ### Evidence
 
-Exact web-axis × cap-polyline crossings, measured after the full topology pass
-(re-measured 2026-08-30, post-cleanup — unchanged):
+Exact web-axis × cap-polyline crossings, measured after the full topology pass:
 
 | Layout | Interior crossings | Cap-node gap | **Web-node gap** |
 |---|---|---|---|
@@ -453,6 +458,10 @@ Exact web-axis × cap-polyline crossings, measured after the full topology pass
 | `2C-F` | 2 | 0.0 µm | **624.0 µm** |
 | `4D-F` | 4 | 0.0 µm | **1569.6 µm** |
 | `5D-CN` | 6 | 0.0 µm | **1949.4 µm** |
+
+Widened later to 9 layouts × 3 twists × 3 chords (81 configurations, 789 interior
+crossings), the worst web-node gap was **4539.1 µm** — more than twice the worst
+in the table above, which had sampled only the 1 m chord.
 
 Conforming only through `section_mesh`'s `ENDPOINT_TOL_FRAC` (6 mm at 1 m
 chord) — **4.05 mm of margin at worst**, in a chord-scaled tolerance. Affects
@@ -476,17 +485,47 @@ reverted**. Placing a web vertex exactly on the cap makes the two polylines
 junction and the cap side regresses. Measured on `4D-F`: web gap 1570 µm → 0,
 cap gap 0 → 1056 µm — a clean swap of which side is broken.
 
-The same mechanism is visible in the current output: re-running
+The same mechanism is visible in correct output: re-running
 `intersect_open_polylines_2d` on prepared strips finds **nothing**, because the
-cap vertex the pass just inserted has already turned every crossing into a
-tangency. That is expected, and is not evidence the pass did nothing.
+node the pass inserted has already turned every crossing into a tangency. That is
+expected, and is not evidence the pass did nothing — but it does mean neither a
+verification nor a test may use that detector.
 
-### Proposed fix
+### Fix
 
-Run **after** the cap resample, where the cap polyline is final, and insert into
-both strips from one solved crossing — i.e. `insert_cap_web_interior_junctions`
-should return modified webs as well as caps. Emit cannot do it, because the cap
-it would compute against is not the cap that survives resampling.
+`insert_cap_web_interior_junctions` now returns modified **webs as well as caps**.
+Each crossing is solved once, and the same point is inserted into both strips, so
+the junction is conformal by construction rather than by the mesher clustering
+two nearby nodes.
+
+Three things make it exact:
+
+- **Detection runs against the original polylines**, and every insertion is
+  applied only afterwards. Because an inserted point already lies on the edge it
+  is inserted into, neither strip's shape changes and no crossing is invalidated
+  — so the tangency trap above never arises.
+- `intersect_open_polylines_2d` now returns the **b-side edge index** as well as
+  the a-side. A junction has two participants, and the caller placing a shared
+  node needs to know which edge of each the crossing lands on. Recovering the
+  second index afterwards would mean searching for the point with a tolerance,
+  which is the failure mode this package keeps designing out.
+- A crossing earns its web node only if the **cap actually carries it** — the
+  pending list is committed against the cap's final polyline. A crossing dropped
+  from the cap (slimmed away as too short) would otherwise get a web node alone,
+  moving the defect rather than fixing it.
+
+Measured across 9 layouts × 3 twists (0°, 15°, 34.11°) × 3 chords
+(1.0, 1.656, 0.241 m) — 81 configurations, 789 interior crossings:
+worst web-node gap **4539.1 µm → 0.0000 µm**, worst cap-node gap **unchanged**
+at 0.8924 µm (SG-007, which pre-dates this and is not caused by it).
+
+Pinned by `tests/test_cap_web_interior_junction_shared_node.py`, 40 cases. It
+locates crossings from the **web axis**, deliberately not with
+`intersect_open_polylines_2d`: a test built on the production detector would pass
+vacuously on a correct fix *and* on one that deleted every junction. Verified to
+discriminate — against the pre-fix code all 20 web-side cases fail and all 20
+cap-side cases pass, which is also independent confirmation that the cap side was
+never the broken one.
 
 ---
 
@@ -538,3 +577,50 @@ With the last consumer gone, `_SKIN_RAY_CAP_BBOX_MARGIN_M` and its re-export fro
 `topology/shell_strip_topology.py` are deleted — 0 references in code.
 Covered by `section_mesh/tests/test_centerline_mesh_plots.py`, which passes
 unaltered: it asserts the figure renders, not what it filters.
+
+---
+
+## SG-007
+
+**`_CAP_WEB_JUNCTION_MERGE_ARC_M` collapses distinct crossings on a short cap**
+
+**Status:** Open — 0.89 µm residual; pre-dates SG-005 and is not caused by it
+**Found:** 2026-08-30, while verifying SG-005
+**Area:** `topology/cap_web_junctions.py`
+
+### Symptom
+
+On a short cap, two genuinely distinct interior web crossings are de-duplicated
+into one, so the second crossing gets no cap node.
+
+### Evidence
+
+Worst case over the SG-005 sweep (81 configurations, 789 interior crossings):
+**0.8924 µm**, on `5C-CN` at zero twist, chord 0.241 m,
+`spar_cap_suction_surface_1`. That cap's arc is **19.282 mm**, and the de-dup
+window there is **1.0000 µm** — larger than the 0.89 µm separating the two
+crossings, so one is discarded.
+
+Measured identically before and after the SG-005 fix, which is what establishes
+that it is a separate defect rather than a side effect.
+
+### Root cause
+
+`merge_arc = max(1e-7 * arc_total, _CAP_WEB_JUNCTION_MERGE_ARC_M)`, with the
+constant at `1e-6` m. The chord-relative term is the intended rule, but on a
+19.28 mm cap it evaluates to 1.93 nm, so the **absolute 1 µm floor dominates** and
+sets the window instead. This is the same pattern as the old `_MERGE_S_TOL_M`
+(see the tolerance audit, category (d)): an absolute tolerance in a path where
+everything else scales with the section, losing headroom as the chord shrinks.
+
+### Why it is filed rather than fixed
+
+Two crossings 0.89 µm apart are real, but noding both creates a sub-µm cap
+segment, and whether the mesher wants that is a separate question from whether
+the geometry is exact. Removing the absolute floor is the obvious change; it
+should be made together with a decision about the minimum segment the shell
+mesher will accept, not ahead of it.
+
+Bounded for now by `test_cap_web_interior_junction_shared_node.py`, whose cap-side
+assertion is set at exactly this 1 µm window — so the residual cannot grow
+without failing a test.

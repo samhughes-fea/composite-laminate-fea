@@ -19,6 +19,53 @@ from ..midlines.ring_geometry import (
 _CAP_WEB_JUNCTION_MERGE_ARC_M: float = 1e-6
 
 
+def _insert_points_on_segments(
+    pts: NDArray[np.float64],
+    insertions: list[tuple[int, float, NDArray[np.float64]]],
+    *,
+    vertex_coincide_tol_m: float,
+    min_seg: float,
+) -> NDArray[np.float64] | None:
+    """Add vertices that already lie on ``pts``, or ``None`` if nothing changes.
+
+    Each insertion is ``(edge_index, t, point)`` with ``point`` on edge
+    ``edge_index``. Nothing is projected, snapped or moved: the polyline's shape
+    is identical afterwards and only its vertex set grows. That exactness is the
+    whole point — the same solved crossing goes into both participants of a
+    junction, so neither has to find the other by tolerance.
+    """
+    by_edge: dict[int, list[tuple[float, NDArray[np.float64]]]] = {}
+    for edge, t, p in insertions:
+        by_edge.setdefault(int(edge), []).append(
+            (float(t), np.asarray(p, dtype=float).reshape(2))
+        )
+    if not by_edge:
+        return None
+
+    rows: list[NDArray[np.float64]] = []
+    changed = False
+    n = int(pts.shape[0])
+    for i in range(n - 1):
+        rows.append(pts[i].copy())
+        for _t, p in sorted(by_edge.get(i, []), key=lambda z: z[0]):
+            if float(np.linalg.norm(pts - p, axis=1).min()) <= vertex_coincide_tol_m:
+                continue
+            if float(np.linalg.norm(p - rows[-1])) < min_seg:
+                continue
+            if float(np.linalg.norm(pts[i + 1] - p)) < min_seg:
+                continue
+            rows.append(p.copy())
+            changed = True
+    rows.append(pts[-1].copy())
+
+    if not changed:
+        return None
+    new_pts = np.stack(rows, axis=0)
+    if new_pts.shape[0] < 2 or open_polyline_min_segment_length(new_pts) < _MIN_SEGMENT_LENGTH_M:
+        return None
+    return new_pts
+
+
 def insert_cap_web_interior_junctions(
     strips: tuple[ShellMidlineStrip, ...],
     *,
@@ -27,12 +74,16 @@ def insert_cap_web_interior_junctions(
     min_seg_m: float | None = None,
     foot_proximity_tol_m: float = 0.0,
 ) -> tuple[ShellMidlineStrip, ...]:
-    """Insert cap midline vertices for web-related T-junctions.
+    """Give cap **and** web a shared node at every interior cap-web T-junction.
 
-    (1) Strict interior **segment intersections** of the cap with each web polyline.
+    (1) Strict interior **segment intersections** of the cap with each web
+    polyline. Each crossing is solved once and the *same* point is inserted into
+    both strips, so the junction is conformal by construction rather than by the
+    mesher clustering two nearby nodes.
     (2) Optional **proximity** to each shear-web **foot** (endpoint on skin): when
     enabled (``foot_proximity_tol_m > 0``) and the foot is within tolerance of the
-    cap polyline, insert the foot ``yz`` as a new vertex.
+    cap polyline, insert the foot ``yz`` as a new vertex. Cap-side only — the foot
+    is already a web vertex.
 
     Layout-wise, **Y = C** systems hit every web this way by construction; **Y = B**
     systems often need it only once **X** is large enough that the cap band
@@ -40,20 +91,37 @@ def insert_cap_web_interior_junctions(
 
     Intended after :func:`split_skin_at_junctions` and (when enabled) after
     :func:`resample_cap_interiors_from_skin_rays`, so cap endpoints are final.
+
+    **Why both sides here and not at emit.** ``shell_midline_export`` closes the
+    cap-*end* junctions on the web at emit, but it cannot close interior ones:
+    the cap it would compute against is not the cap that survives resampling.
+    Nor can the web side be done first and the cap side detected afterwards —
+    placing a web vertex exactly on the cap turns the crossing into a tangency
+    and :func:`intersect_open_polylines_2d` then finds nothing, which measured as
+    a clean swap of which side was broken (``4D-F``: web 1570 um -> 0,
+    cap 0 -> 1056 um). Detection therefore runs against the *original* polylines
+    and every insertion is applied afterwards; because an inserted point already
+    lies on the segment it is inserted into, neither shape moves and the
+    detection stays valid. See ``docs/bug_log.md`` SG-005.
     """
     web_pts: list[NDArray[np.float64]] = []
     web_feet: list[NDArray[np.float64]] = []
-    for st in strips:
+    web_strip_index: list[int] = []
+    for idx, st in enumerate(strips):
         if st.kind != "web":
             continue
         w = np.asarray(st.midline_twisted_pitch_axis_blade_frame, dtype=float)
         if w.shape[0] >= 2:
             web_pts.append(w)
+            web_strip_index.append(idx)
             web_feet.append(np.asarray(w[0], dtype=float).reshape(2))
             web_feet.append(np.asarray(w[-1], dtype=float).reshape(2))
 
     if not web_pts:
         return strips
+
+    # strip index -> [(web edge index, t along that edge, crossing point)]
+    web_insertions: dict[int, list[tuple[int, float, NDArray[np.float64]]]] = {}
 
     min_seg = float(min_seg_m) if min_seg_m is not None else max(_MIN_SEGMENT_LENGTH_M * 100.0, 1e-9)
     foot_tol = float(foot_proximity_tol_m)
@@ -81,17 +149,22 @@ def insert_cap_web_interior_junctions(
         eps_s = max(1e-12 * arc_total, 1e-15)
 
         hits: list[tuple[float, NDArray[np.float64]]] = []
+        # Crossings against this cap, held back until the cap's own polyline is
+        # final: a point only earns a web node if the cap really carries it.
+        pending_web: list[tuple[int, int, float, NDArray[np.float64]]] = []
         n = int(pts.shape[0])
         seg_lens = np.linalg.norm(np.diff(pts, axis=0), axis=1)
-        for w in web_pts:
-            for i, ta, _tb, p_hit in intersect_open_polylines_2d(pts, w):
+        for w, w_idx in zip(web_pts, web_strip_index, strict=True):
+            for i, j, ta, tb, p_hit in intersect_open_polylines_2d(pts, w):
                 seg_len = float(seg_lens[i])
                 if seg_len < min_seg:
                     continue
                 s_hit = float(prefix[i] + ta * seg_len)
                 if s_hit <= merge_arc or s_hit >= arc_total - merge_arc:
                     continue
-                hits.append((s_hit, np.asarray(p_hit, dtype=float).reshape(2)))
+                p = np.asarray(p_hit, dtype=float).reshape(2)
+                hits.append((s_hit, p))
+                pending_web.append((w_idx, j, tb, p))
 
         if use_foot_proximity and web_feet:
             a0 = pts[:-1]
@@ -137,7 +210,23 @@ def insert_cap_web_interior_junctions(
         # confirming byte-identical output across 108 layout x twist x chord
         # configurations with the branch disabled. See ``docs/bug_log.md`` SG-004.
 
+        def _queue_web_nodes(final_cap_pts: NDArray[np.float64]) -> None:
+            """Queue the web half of every crossing the cap actually carries.
+
+            Guards against a half-made junction: if a crossing was dropped from
+            the cap (slimmed away as too short, say), putting the node on the
+            web alone would move the defect rather than fix it. A crossing that
+            was skipped because the cap *already* had a vertex there still
+            qualifies — the cap has the node either way.
+            """
+            for w_idx, j_edge, t_edge, p in pending_web:
+                gap = float(np.linalg.norm(final_cap_pts - p, axis=1).min())
+                if gap > vertex_coincide_tol_m:
+                    continue
+                web_insertions.setdefault(w_idx, []).append((j_edge, t_edge, p))
+
         if not hits:
+            _queue_web_nodes(pts)
             out.append(st)
             continue
 
@@ -151,6 +240,7 @@ def insert_cap_web_interior_junctions(
             merged.append((s_h, p_h))
 
         if not merged:
+            _queue_web_nodes(pts)
             out.append(st)
             continue
 
@@ -176,9 +266,26 @@ def insert_cap_web_interior_junctions(
 
         new_pts = np.stack(slim, axis=0)
         if new_pts.shape[0] < 2 or open_polyline_min_segment_length(new_pts) < _MIN_SEGMENT_LENGTH_M:
+            _queue_web_nodes(pts)
             out.append(st)
             continue
+        _queue_web_nodes(new_pts)
         out.append(replace(st, midline_twisted_pitch_axis_blade_frame=new_pts))
+
+    # Web half of each junction, applied only now: detection above ran against
+    # the original webs, and an inserted point already lies on the edge it is
+    # inserted into, so no web moves and no crossing is invalidated.
+    for w_idx, insertions in web_insertions.items():
+        web_st = out[w_idx]
+        w_pts = np.asarray(web_st.midline_twisted_pitch_axis_blade_frame, dtype=float)
+        new_w = _insert_points_on_segments(
+            w_pts,
+            insertions,
+            vertex_coincide_tol_m=vertex_coincide_tol_m,
+            min_seg=min_seg,
+        )
+        if new_w is not None:
+            out[w_idx] = replace(web_st, midline_twisted_pitch_axis_blade_frame=new_w)
 
     return tuple(out)
 

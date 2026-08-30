@@ -184,11 +184,17 @@ def intersect_open_polylines_2d(
     b_pts: NDArray[np.float64],
     *,
     eps: float = 1e-9,
-) -> list[tuple[int, float, float, NDArray[np.float64]]]:
+) -> list[tuple[int, int, float, float, NDArray[np.float64]]]:
     """All strict-interior edge×edge intersections of two open polylines.
 
-    Returns ``(i_edge_a, ta, tb, point)`` with ``ta,tb`` in ``(eps, 1-eps)``,
-    matching :func:`intersect_open_segments_2d` semantics.
+    Returns ``(i_edge_a, j_edge_b, ta, tb, point)`` with ``ta,tb`` in
+    ``(eps, 1-eps)``, matching :func:`intersect_open_segments_2d` semantics.
+
+    Both edge indices are reported because a junction has two participants: a
+    caller that has to place a shared node on *both* polylines needs to know
+    which edge of each one the single solved crossing lands on. Recovering the
+    second index afterwards would mean searching for the point with a tolerance,
+    which is the failure mode this package keeps designing out.
     """
     a = np.asarray(a_pts, dtype=float)
     b = np.asarray(b_pts, dtype=float)
@@ -218,12 +224,12 @@ def intersect_open_polylines_2d(
         & (tb < 1.0 - eps)
     )
     ii, jj = np.nonzero(ok)
-    out: list[tuple[int, float, float, NDArray[np.float64]]] = []
+    out: list[tuple[int, int, float, float, NDArray[np.float64]]] = []
     for i, j in zip(ii.tolist(), jj.tolist()):
         ta_i = float(ta[i, j])
         tb_j = float(tb[i, j])
         pt = (a0[i] + ta_i * r[i]).astype(float)
-        out.append((int(i), ta_i, tb_j, pt.reshape(2)))
+        out.append((int(i), int(j), ta_i, tb_j, pt.reshape(2)))
     return out
 
 
