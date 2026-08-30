@@ -45,6 +45,7 @@ Checked-in gallery:
 | [`spanwise_web_anchors.py`](spanwise_web_anchors.py) | Root-anchored vs per-station web positions |
 | [`skin_ss_ps_taxonomy_demo.py`](skin_ss_ps_taxonomy_demo.py) | Upper/lower skin solids and midline arcs |
 | [`shell_junction_topology_demo.py`](shell_junction_topology_demo.py) | Junction snap before/after |
+| [`sg009_axis_cap_junction_spike.py`](sg009_axis_cap_junction_spike.py) | SG-009 offline: axis x cap oracle vs production shared nodes |
 | [`void_cell_wall_loops_demo.py`](void_cell_wall_loops_demo.py) | Closed cell loops for 0–5 webs |
 | [`topology_twist_stability_demo.py`](topology_twist_stability_demo.py) | Junction gaps vs twist |
 | [`dual_rep_consistency_demo.py`](dual_rep_consistency_demo.py) | Polygon boundary vs SDF contour |

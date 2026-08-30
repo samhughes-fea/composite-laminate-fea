@@ -66,6 +66,7 @@ Runnable teaching scripts (not plot demos):
 | [`figures/`](figures/README.md) | Checked-in figures and regenerate commands |
 | [`DUAL_REP_ACCEPTANCE.md`](DUAL_REP_ACCEPTANCE.md) | Polygon vs SDF area acceptance |
 | [`PERFORMANCE_WORK_SUMMARY.md`](PERFORMANCE_WORK_SUMMARY.md) | Hybrid / quadtree performance notes |
+| [`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md) | SG-009 design spike: post-resample axis x cap junctions |
 | [`bug_log.md`](bug_log.md) | Debug log |
 
 ## Module pages

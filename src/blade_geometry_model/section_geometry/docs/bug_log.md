@@ -772,6 +772,14 @@ touches the emit path for every component and is not fixing a live numeric
 defect. SG-005's detect-then-insert guard remains the production rule until that
 rewrite.
 
+**Design spike (2026-08-30):** post-resample web-axis × final-cap solve is the
+chosen direction — see
+[`reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md`](reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md)
+and the offline check
+[`visualisation/demos/sg009_axis_cap_junction_spike.py`](../visualisation/demos/sg009_axis_cap_junction_spike.py).
+Status remains Deferred pending a separate rewrite decision. BL-014 and
+analytic-NACA LE budgets are out of scope for that rewrite.
+
 ---
 
 ## SG-010
