@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from .web_layout import inner_y_at_xs
@@ -10,6 +12,23 @@ from .web_layout import inner_y_at_xs
 # (ellipse void) is never consumed: absolute floor and fraction of local depth.
 MIN_CAP_VOID_ABS_M = 0.001
 MIN_CAP_VOID_FRAC = 0.15
+
+# Solids camber-clip resolution (SG-010). Chord-approx error of the cavity
+# midline scales ~ band / n² for similar sections. Budget is well below the
+# airfoil-polygon LE floor (~62 µm at n_points=200 / 1 m chord, SG-008), so
+# solid areas inherit the polygon contract rather than this knob.
+CAMBER_CLIP_DEV_BUDGET_M = 1e-6  # 1 µm
+_CAMBER_CLIP_N_MIN = 33
+# Fitted to measured 18.56 µm deviation at n=33 on a 0.50 m band (x/c 0.15–0.65
+# at 1 m chord, NACA 2412, 6 mm skin): err ≈ C * band / n².
+_CAMBER_CLIP_C = 18.56e-6 * (33**2) / 0.50
+
+
+def default_camber_clip_n_samples(x_lo: float, x_hi: float) -> int:
+    """Sample count so cavity-midline chord error stays within the solid-clip budget."""
+    band = max(abs(float(x_hi) - float(x_lo)), 1e-12)
+    n = int(math.ceil(math.sqrt(_CAMBER_CLIP_C * band / CAMBER_CLIP_DEV_BUDGET_M)))
+    return max(_CAMBER_CLIP_N_MIN, n)
 
 
 def cap_feasibility_clamp(
@@ -22,7 +41,7 @@ def cap_feasibility_clamp(
     *,
     y_search,
     phi_inner_ref,
-    n_samples: int = 33,
+    n_samples: int | None = None,
     aft_half_depth_rule: bool = False,
 ) -> tuple[float, float, float, float, dict]:
     """Clamp cap heights / chordwise extent so the caps never meet.
@@ -39,7 +58,11 @@ def cap_feasibility_clamp(
     web-to-web band and at most butt at the cavity midline at the aft web.
 
     Returns ``(x_lo_eff, x_hi_eff, cap_h_upper_eff, cap_h_lower_eff, info)``.
-    ``info["camber_xy"]`` holds sampled cavity-midline points for the cap split.
+    ``info["camber_xy"]`` holds sampled cavity-midline points for the cap split
+    (solids / properties only — not shell midlines; see bug_log SG-010).
+
+    Default ``n_samples`` is derived from band width so the clip polyline's
+    chord-approximation stays within :data:`CAMBER_CLIP_DEV_BUDGET_M`.
     """
     caps_sum = float(cap_h_upper) + float(cap_h_lower)
     info: dict = {
@@ -51,7 +74,12 @@ def cap_feasibility_clamp(
     if caps_sum <= 0.0 or x_hi <= x_lo:
         return float(x_lo), float(x_hi), float(cap_h_upper), float(cap_h_lower), info
 
-    xs_q = np.linspace(float(x_lo), float(x_hi), int(n_samples))
+    n = (
+        int(n_samples)
+        if n_samples is not None
+        else default_camber_clip_n_samples(x_lo, x_hi)
+    )
+    xs_q = np.linspace(float(x_lo), float(x_hi), n)
     depth = np.full(xs_q.shape, -np.inf)
     y_mid = np.full(xs_q.shape, np.nan)
     # One shared φ grid eval for all sample stations. Feasibility only needs
@@ -156,6 +184,8 @@ _cap_feasibility_clamp = cap_feasibility_clamp
 __all__ = [
     "MIN_CAP_VOID_ABS_M",
     "MIN_CAP_VOID_FRAC",
+    "CAMBER_CLIP_DEV_BUDGET_M",
+    "default_camber_clip_n_samples",
     "cap_feasibility_clamp",
     "_cap_feasibility_clamp",
 ]

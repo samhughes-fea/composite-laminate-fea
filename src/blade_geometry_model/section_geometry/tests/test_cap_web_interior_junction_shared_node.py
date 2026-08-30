@@ -49,12 +49,11 @@ CHORD_M = [1.0, 0.241]
 #: The web node is placed at the solved crossing itself, so nothing but
 #: floating-point should separate them.
 _MAX_WEB_GAP_M = 1e-9
-#: The cap side is allowed the de-dup window of ``_CAP_WEB_JUNCTION_MERGE_ARC_M``
-#: (1 um absolute), which can collapse two crossings that are genuinely distinct
-#: on a short cap. Worst measured 0.89 um on ``5C-CN`` at the tip chord. This is
-#: a pre-existing residual tracked as SG-007 — not licence for the cap side to
-#: drift, which is why the bound is 1 um and not "small".
-_MAX_CAP_GAP_M = 1e-6
+#: Cap side used to allow a 1 µm absolute window (merge floor and
+#: ``vertex_coincide_tol_m``), which left a 0.89 µm residual on ``5C-CN`` when a
+#: resampled vertex sat just inside that window of the true crossing (SG-007).
+#: Both floors are gone / tightened to 1 nm, so both sides share the same bound.
+_MAX_CAP_GAP_M = 1e-9
 
 
 def _prepared(layout_key: str, twist_deg: float, chord_m: float):

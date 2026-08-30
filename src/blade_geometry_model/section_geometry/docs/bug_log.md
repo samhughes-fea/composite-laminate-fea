@@ -32,10 +32,10 @@ Deviations are stated per entry.
 | [SG-004](#sg-004) | Cap–web junction has no shared node at a cap **end** | **Fixed** at emit |
 | [SG-005](#sg-005) | Interior cap–web T-junctions have a node on the **cap** side only | **Fixed** — one solved crossing inserted into both strips |
 | [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Fixed** — plot mirrors the resampler; the constant is gone |
-| [SG-007](#sg-007) | `_CAP_WEB_JUNCTION_MERGE_ARC_M` collapses distinct crossings on a short cap | **Open** — 0.89 µm residual, pre-dates SG-005 |
-| [SG-008](#sg-008) | Airfoil polygonisation is the package's real exactness floor, and is un-budgeted | **Open** — ~62 µm at the LE; needs a decision before a fix |
-| [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Open** — architectural; SG-005 is a guarded instance |
-| [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Open** — 18.6 µm at 1 m chord |
+| [SG-007](#sg-007) | Absolute merge / coincide floors leave a 0.89 µm cap-node residual | **Fixed** — arc-fraction merge; coincide tol 1 nm |
+| [SG-008](#sg-008) | Airfoil polygonisation is the package's real exactness floor, and is un-budgeted | **Closed** — polygon *is* the section; documented |
+| [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Deferred** — architectural; wait on emit rewrite |
+| [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Fixed** — `n_samples` derived from a 1 µm solid-clip budget |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -94,9 +94,13 @@ Deleted during the 2026-08-30 cleanup, 0 references each: `_CAP_ENDPOINT_ON_WEB_
 `ShellStripTopologySpec.skin_ray_cap_bbox_margin_m`, and the
 `skin_ray_cap_bbox_margin_m` parameter of `shell_mesh_inputs_from_section`.
 
-**Still open:** SG-007 (a 0.89 µm residual in the junction path) and SG-008 /
-SG-009 / SG-010, which are about the *resolution the section is entitled to
-claim* rather than about junctions. None is a live defect.
+**Resolution / architecture (2026-08-30 follow-up):** SG-008 closed as
+documentation — the discrete airfoil polygon *is* the section. SG-010 budgets
+the solids camber clip under that contract. SG-007 drops the absolute merge
+floor and tightens `vertex_coincide_tol_m` to 1 nm (the 0.89 µm residual was the
+coincide guard skipping a true crossing next to a resampled vertex). SG-009
+remains deferred: primitive junction solve on the emit path, no live numeric
+defect.
 
 ### One offset operator (hardened 2026-08-30)
 
@@ -137,7 +141,7 @@ quantity that is knowable exactly.
 | `_CAP_ENDPOINT_ON_WEB_TOL_M` deciding whether to relocate a cap end | fixed, then **deleted** — nothing relocates, so nothing decides (SG-003, SG-004) |
 | web foot ← nearest-point projection | fixed — emit extent corrected (SG-002) |
 | cap↔web node ← mesher `ENDPOINT_TOL_FRAC` | fixed — cap **ends** at emit (SG-004), cap **interiors** from one solved crossing (SG-005) |
-| `_CAP_WEB_JUNCTION_MERGE_ARC_M` deciding whether two crossings are one | **open** — its absolute floor discards a real crossing on a short cap (SG-007) |
+| `_CAP_WEB_JUNCTION_MERGE_ARC_M` / 1 µm `vertex_coincide_tol_m` deciding a crossing is already noded | **fixed** — merge is arc-fraction; coincide default is 1 nm (SG-007) |
 
 **(b) Correctly scaled design rules — not numerical tolerances at all.**
 
@@ -154,12 +158,14 @@ they are.
   `_MIN_SEGMENT_LENGTH_M = 1e-12`, `_SKIN_RAY_T_MIN_M = 1e-9` — floating-point
   is-zero and degenerate-geometry guards.
 - `vertex_coincide_tol_m` in `insert_cap_web_interior_junctions` — asks whether a
-  strip already has the node, which is a de-duplication question, not a
-  classification of geometry.
+  strip already has the node. Default was 1 µm and masked SG-007; now 1 nm so it
+  is de-duplication of floating-point repeats, not classification of nearby
+  geometry.
 
 `_CAP_WEB_JUNCTION_MERGE_ARC_M` was listed here on the same grounds until SG-007
 showed it is not: its absolute floor decides that two distinct crossings are one,
-which *is* classification. Moved to (a).
+which *is* classification. Moved to (a), then fixed by deleting the absolute
+floor the same way `_MERGE_S_TOL_M` was removed.
 
 **(d) Scale-dependent but safe — fixed anyway.**
 
@@ -534,8 +540,8 @@ Three things make it exact:
 
 Measured across 9 layouts × 3 twists (0°, 15°, 34.11°) × 3 chords
 (1.0, 1.656, 0.241 m) — 81 configurations, 789 interior crossings:
-worst web-node gap **4539.1 µm → 0.0000 µm**, worst cap-node gap **unchanged**
-at 0.8924 µm (SG-007, which pre-dates this and is not caused by it).
+worst web-node gap **4539.1 µm → 0.0000 µm**, worst cap-node gap then still
+at 0.8924 µm (SG-007 — absolute coincide / merge floors; fixed separately).
 
 Pinned by `tests/test_cap_web_interior_junction_shared_node.py`, 40 cases. It
 locates crossings from the **web axis**, deliberately not with
@@ -600,48 +606,62 @@ unaltered: it asserts the figure renders, not what it filters.
 
 ## SG-007
 
-**`_CAP_WEB_JUNCTION_MERGE_ARC_M` collapses distinct crossings on a short cap**
+**Absolute merge / coincide floors leave a 0.89 µm cap-node residual**
 
-**Status:** Open — 0.89 µm residual; pre-dates SG-005 and is not caused by it
+**Status:** Fixed — arc-fraction merge; coincide tol 1 nm
 **Found:** 2026-08-30, while verifying SG-005
+**Fixed:** 2026-08-30
 **Area:** `topology/cap_web_junctions.py`
 
 ### Symptom
 
-On a short cap, two genuinely distinct interior web crossings are de-duplicated
-into one, so the second crossing gets no cap node.
+On a short / densely resampled cap, an interior web crossing can leave the cap
+node **0.89 µm** off the web axis even after SG-005 inserts shared nodes.
 
 ### Evidence
 
 Worst case over the SG-005 sweep (81 configurations, 789 interior crossings):
 **0.8924 µm**, on `5C-CN` at zero twist, chord 0.241 m,
-`spar_cap_suction_surface_1`. That cap's arc is **19.282 mm**, and the de-dup
-window there is **1.0000 µm** — larger than the 0.89 µm separating the two
-crossings, so one is discarded.
+`spar_cap_suction_surface_1`. Measured identically before and after the SG-005
+fix.
 
-Measured identically before and after the SG-005 fix, which is what establishes
-that it is a separate defect rather than a side effect.
+On that case the production detector finds one crossing whose solved point lies
+**0.89 µm** from an existing skin-ray-resampled cap vertex. With
+`vertex_coincide_tol_m = 1e-6` the insert was skipped, so the cap kept the
+nearby sample instead of the true junction. Separately, the absolute merge floor
+`_CAP_WEB_JUNCTION_MERGE_ARC_M = 1e-6` could also collapse two crossings closer
+than 1 µm on a short cap (same absolute-tolerance pattern as the old
+`_MERGE_S_TOL_M`).
 
 ### Root cause
 
-`merge_arc = max(1e-7 * arc_total, _CAP_WEB_JUNCTION_MERGE_ARC_M)`, with the
-constant at `1e-6` m. The chord-relative term is the intended rule, but on a
-19.28 mm cap it evaluates to 1.93 nm, so the **absolute 1 µm floor dominates** and
-sets the window instead. This is the same pattern as the old `_MERGE_S_TOL_M`
-(see the tolerance audit, category (d)): an absolute tolerance in a path where
-everything else scales with the section, losing headroom as the chord shrinks.
+Absolute 1 µm floors in a path where everything else scales with the section:
+`max(1e-7 * arc_total, 1e-6)` for merge, and `vertex_coincide_tol_m = 1e-6` for
+“already noded”. On a 19 mm tip-scale cap the intended arc-fraction merge is
+~2 nm, so the absolute floor dominated; the coincide guard was the direct cause
+of the measured `5C-CN` residual.
 
-### Why it is filed rather than fixed
+### Fix
 
-Two crossings 0.89 µm apart are real, but noding both creates a sub-µm cap
-segment, and whether the mesher wants that is a separate question from whether
-the geometry is exact. Removing the absolute floor is the obvious change; it
-should be made together with a decision about the minimum segment the shell
-mesher will accept, not ahead of it.
+Two absolute floors were involved:
 
-Bounded for now by `test_cap_web_interior_junction_shared_node.py`, whose cap-side
-assertion is set at exactly this 1 µm window — so the residual cannot grow
-without failing a test.
+1. **`_CAP_WEB_JUNCTION_MERGE_ARC_M = 1e-6`** — deleted. Default merge is now
+   `_CAP_WEB_JUNCTION_MERGE_ARC_FRAC * arc_total` (`1e-7`), matching the skin-cut
+   `_MERGE_S_TOL_FRAC` pattern. Callers that need an absolute window still pass
+   `merge_arc_m` explicitly.
+
+2. **`vertex_coincide_tol_m = 1e-6`** — the residual on `5C-CN` was this, not
+   merge de-dup. After skin-ray resample, a cap vertex already sat **0.89 µm**
+   from the true web×cap crossing; the coincide guard treated that as “node
+   already present” and skipped inserting the solved point, leaving the cap
+   0.89 µm off the axis. Default lowered to **1 nm** (same order as the pass’s
+   `min_seg` and the shared-node test).
+
+Checked against the shell handoff: `section_mesh` rejects only segments shorter
+than `_MIN_SEGMENT_LENGTH_M = 1e-12` m, and this pass already refuses insertions
+that would create edges shorter than its own `min_seg` default (1 nm). A
+sub-µm cap segment between a resampled vertex and the exact crossing is
+therefore acceptable. Cap-side shared-node test tightened from 1 µm to 1 nm.
 
 ---
 
@@ -649,8 +669,9 @@ without failing a test.
 
 **Airfoil polygonisation is the package's real exactness floor, and is un-budgeted**
 
-**Status:** Open — needs a definitional decision before it needs a fix
+**Status:** Closed — decision: the polygon *is* the section (reading 1)
 **Found:** 2026-08-30
+**Closed:** 2026-08-30
 **Area:** `sdf/airfoil.py` — `AirfoilSDF.from_naca(..., n_points=...)`, and every
 call site that picks `n_points`
 
@@ -677,28 +698,25 @@ a chord approximation of a curve should. So this is discretisation, not a defect
 in the sampling.
 
 For scale, 62 µm is **~1 % of a 6 mm skin gauge**, at the most curved part of the
-skin, and roughly 70x the worst junction error that remains anywhere else in the
-package (SG-007, 0.89 µm).
+skin, and roughly 70x the worst junction residual that remained while SG-007 was
+open (0.89 µm).
 
 Measurements away from the LE are dominated by a trailing-edge closure
 difference between the SDF's airfoil and an open-TE analytic reference; that
 part is a reference artefact, not a package error, and was excluded.
 
-### Why this is a decision before it is a fix
+### Decision
 
-Two readings are defensible and they lead to different work:
+**The polygon *is* the section.** The package's input contract is a discretised
+aerofoil; everything downstream is exact with respect to it. The ~62 µm LE gap
+at default `n_points=200` is how closely the NACA *generator* matches its closed
+form — not a junction defect, and not something the topology path should chase.
+Raising `n_points` refines the polygon when a caller wants a finer outline.
 
-1. **The polygon *is* the section.** The package's input contract is a
-   discretised aerofoil, everything downstream is exact with respect to it, and
-   62 µm is not an error at all. Then the fix is documentation: say so plainly,
-   because the current silence lets a reader assume the analytic curve is meant.
-2. **The polygon approximates the aerofoil.** Then `n_points` needs to come from
-   a stated LE-error budget rather than habit, with a convergence test pinning
-   it, and the budget should be justified against skin gauge rather than chosen
-   for roundness.
-
-Until that is settled, quoting micron-level junction figures without this
-caveat overstates what the geometry knows.
+Documented in the package README Notes, `sdf/README.md`, and the
+`AirfoilSDF.from_naca` docstring. Reading (2) — budget `n_points` against an
+analytic LE error — is deliberately not taken; reverse that only with an
+explicit product decision.
 
 ---
 
@@ -706,7 +724,7 @@ caveat overstates what the geometry knows.
 
 **Junction detection reads sampled polylines, so exactness fights detectability**
 
-**Status:** Open — architectural; no live defect
+**Status:** Deferred — architectural; no live defect
 **Found:** 2026-08-30, generalising SG-005
 **Area:** `topology/` and `midlines/` junction path
 
@@ -749,9 +767,10 @@ and intersecting afterwards. That makes SG-005's fix the rule rather than a
 guarded special case, and removes the class of trap above rather than
 documenting around it each time.
 
-Filed rather than done because it touches the emit path for every component and
-should not be attempted while SG-008 is unresolved — there is little value in a
-more exact junction solver sitting on an un-budgeted aerofoil.
+**Deferred** after SG-008 closed: the polygon contract is settled, but this still
+touches the emit path for every component and is not fixing a live numeric
+defect. SG-005's detect-then-insert guard remains the production rule until that
+rewrite.
 
 ---
 
@@ -759,10 +778,12 @@ more exact junction solver sitting on an un-budgeted aerofoil.
 
 **The surface dividing suction from pressure spar caps is a 33-point polyline**
 
-**Status:** Open
+**Status:** Fixed — `n_samples` derived from a 1 µm solid-clip budget
 **Found:** 2026-08-30
+**Fixed:** 2026-08-30
 **Area:** `sections/cap_feasibility.py` → `constructive/emitters.py::_camber_clip`
-and `sections/components/outer_skin.py::_camber_side_split`
+and `sections/components/spar_cap.py::_camber_side_split` (consumed via
+`outer_skin.py`)
 
 ### Symptom
 
@@ -805,10 +826,11 @@ does not touch the strip geometry that SG-001 to SG-005 were about. It affects
 the cap **solids** — areas, and therefore section properties and mass
 distribution.
 
-### Proposed fix
+### Fix
 
-`n_samples` is a resolution knob on a locus that can be evaluated at any x, so
-the honest options are to derive it from a stated tolerance, or to stop
-approximating and clip against an evaluated midline. Either way it should be
-decided together with SG-008, since both are the same question — what resolution
-is the section entitled to claim.
+Under the SG-008 polygon contract, the solids clip should not be coarser than
+the outline it inherits. Default `n_samples` is now derived from band width so
+chord-approximation deviation stays within
+`CAMBER_CLIP_DEV_BUDGET_M = 1e-6` (1 µm) — well below the ~62 µm LE polygon
+floor. Callers may still pass an explicit `n_samples`. Feasibility clamping
+behaviour is unchanged; only the clip polyline densifies.

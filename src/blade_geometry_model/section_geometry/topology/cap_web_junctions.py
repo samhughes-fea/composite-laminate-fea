@@ -16,7 +16,7 @@ from ..midlines.ring_geometry import (
     open_polyline_prefix_lengths,
 )
 
-_CAP_WEB_JUNCTION_MERGE_ARC_M: float = 1e-6
+_CAP_WEB_JUNCTION_MERGE_ARC_FRAC: float = 1e-7
 
 
 def _insert_points_on_segments(
@@ -69,7 +69,7 @@ def _insert_points_on_segments(
 def insert_cap_web_interior_junctions(
     strips: tuple[ShellMidlineStrip, ...],
     *,
-    vertex_coincide_tol_m: float = 1e-6,
+    vertex_coincide_tol_m: float = 1e-9,
     merge_arc_m: float | None = None,
     min_seg_m: float | None = None,
     foot_proximity_tol_m: float = 0.0,
@@ -144,7 +144,7 @@ def insert_cap_web_interior_junctions(
         merge_arc = (
             float(merge_arc_m)
             if merge_arc_m is not None
-            else max(1e-7 * arc_total, _CAP_WEB_JUNCTION_MERGE_ARC_M)
+            else _CAP_WEB_JUNCTION_MERGE_ARC_FRAC * arc_total
         )
         eps_s = max(1e-12 * arc_total, 1e-15)
 
@@ -291,6 +291,6 @@ def insert_cap_web_interior_junctions(
 
 
 __all__ = [
-    "_CAP_WEB_JUNCTION_MERGE_ARC_M",
+    "_CAP_WEB_JUNCTION_MERGE_ARC_FRAC",
     "insert_cap_web_interior_junctions",
 ]

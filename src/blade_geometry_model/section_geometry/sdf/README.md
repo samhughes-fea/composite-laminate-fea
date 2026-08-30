@@ -22,6 +22,15 @@ The usual station outline. Construct from a NACA code, a vertex array, or a
 Selig `.dat` file. The instance is callable: `phi = airfoil(x, y)` with
 `phi < 0` inside.
 
+**Contract (SG-008).** The discrete contour polygon *is* the section geometry.
+Offsets, midlines, junctions, and solids are exact with respect to that
+polyline — not with respect to an analytic aerofoil curve. Default
+`n_points=200` is a sampling choice that sets how closely a NACA generator
+matches its closed form (~62 µm LE deviation on NACA 2412 at 1 m chord);
+raising `n_points` refines the polygon, it does not “fix” a package defect.
+Micron-level junction figures elsewhere in the package are relative to this
+polygon. See [`../docs/bug_log.md`](../docs/bug_log.md) SG-008.
+
 ```python
 from blade_structure_utilities.geometry_utilities.section_geometry import AirfoilSDF
 

@@ -86,6 +86,25 @@ def test_camber_midline_is_returned_for_the_cap_split() -> None:
     assert np.all(np.isfinite(camber))
 
 
+def test_default_camber_clip_n_samples_meets_budget() -> None:
+    """SG-010: default density tracks band width for the 1 µm solid-clip budget."""
+    from blade_structure_utilities.geometry_utilities.section_geometry.sections.cap_feasibility import (
+        default_camber_clip_n_samples,
+    )
+
+    # Reference band x/c 0.15–0.65 at 1 m chord → ~142 samples (≥ 33 floor).
+    n_1m = default_camber_clip_n_samples(0.15, 0.65)
+    assert n_1m >= 140
+    # Narrower tip-scale band needs fewer absolute samples but still ≥ floor.
+    n_tip = default_camber_clip_n_samples(0.15 * 0.241, 0.65 * 0.241)
+    assert n_tip >= 33
+    assert n_tip < n_1m
+
+    af = _af()
+    _lo, _hi, _hu, _hl, info = _clamp(af, 0.003, 0.004, 0.004, x_lo=0.15, x_hi=0.65)
+    assert info["camber_xy"].shape[0] == n_1m
+
+
 @pytest.mark.parametrize("layout_key", ["0B", "1B-CN", "2C-CN", "5C-F", "3C-F"])
 def test_short_chord_thick_cap_builds_for_families_b_and_c(layout_key: str) -> None:
     """The 49-case class: absolute thicknesses on a tip-scale chord.
