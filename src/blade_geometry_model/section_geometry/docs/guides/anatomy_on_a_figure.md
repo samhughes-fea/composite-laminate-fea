@@ -20,15 +20,20 @@ Map a twin-web `"2D-F"` plot to `SectionGeometryResult` labels. Overview:
 ## Figure
 
 Layout `"2D-F"`: two shear webs, family-D continuous box caps, flapwise webs.
-Demo thicknesses (NACA 2412, chord 1 m).
+Demo thicknesses (NACA 2412, chord 1 m). Legend names the wall solids listed
+below.
 
-![2D-F](../../visualisation/output/structural_family_grids/2D-F.png)
+![2D-F labelled](../../visualisation/output/anatomy_2d_f/2D-F_labelled.png)
 
 Generated, not checked in. Regenerate with:
 
 ```bash
-python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py
+python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/anatomy_2d_f_demo.py
 ```
+
+Legend-less gallery tiles (all 40 keys) still come from
+[`structural_family_grids_demo.py`](../../visualisation/demos/structural_family_grids_demo.py);
+see [`ARTIFACTS.md`](../../visualisation/demos/ARTIFACTS.md).
 
 Chord runs roughly horizontal in the section plot; LE is toward the right in
 the structural plot contract (see

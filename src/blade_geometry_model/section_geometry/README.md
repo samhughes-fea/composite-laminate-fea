@@ -130,10 +130,12 @@ A twin-web family-D section (layout `"2D-F"`):
 
 Figures on this page are **generated, not checked in** —
 `visualisation/output/` is gitignored, so they render locally once the gallery
-demo has been run and are absent in a fresh clone:
+demo has been run and are absent in a fresh clone. Full regen list:
+[`visualisation/demos/ARTIFACTS.md`](visualisation/demos/ARTIFACTS.md).
 
 ```bash
 python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py
+python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/anatomy_2d_f_demo.py
 ```
 
 ## Structural systems

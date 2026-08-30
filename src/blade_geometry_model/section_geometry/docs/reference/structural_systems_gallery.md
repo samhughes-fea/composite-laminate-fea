@@ -8,7 +8,9 @@ family **Y**). Decode: [`system_type_xyz_taxonomy.md`](system_type_xyz_taxonomy.
 
 Figures: NACA 2412 + demo thicknesses from `structural_family_grids_demo.py`
 ([`../visualisation/output/structural_family_grids/`](../../visualisation/output/structural_family_grids);
-gitignored — regenerate to preview). Production builds set `skin_thickness` /
+gitignored — regenerate to preview; see
+[`../visualisation/demos/ARTIFACTS.md`](../../visualisation/demos/ARTIFACTS.md)).
+Production builds set `skin_thickness` /
 `spar_cap_thickness` / `shear_web_thickness` (optional `web_x_positions_m`).
 
 ## Table of contents
@@ -21,7 +23,8 @@ gitignored — regenerate to preview). Production builds set `skin_thickness` /
 6. [Web count X = 5](#web-x-5)
 7. [See also](#see-also)
 
-**Regenerate** (from repo root; writes the paths above):
+**Regenerate** (from repo root; full artefact list in
+[`ARTIFACTS.md`](../../visualisation/demos/ARTIFACTS.md)):
 
 ```bash
 python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py

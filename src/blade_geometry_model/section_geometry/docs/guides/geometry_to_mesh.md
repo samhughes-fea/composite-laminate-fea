@@ -74,7 +74,8 @@ Raises `ValueError` if `midline_strips` (or chord / twist / LE/TE) are missing.
 | `layout_key` | Optional catalogue key for downstream logging |
 
 Strip `kind` / `label` match the anatomy table in
-[`anatomy_on_a_figure.md`](anatomy_on_a_figure.md).
+[`anatomy_on_a_figure.md`](anatomy_on_a_figure.md)
+(same folder as this guide).
 
 ---
 
