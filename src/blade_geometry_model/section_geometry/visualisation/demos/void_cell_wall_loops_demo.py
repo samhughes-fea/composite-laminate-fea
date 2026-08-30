@@ -1,5 +1,5 @@
 """
-examples/void_cell_wall_loops_demo.py
+visualisation/demos/void_cell_wall_loops_demo.py
 =====================================
 Plot constructive void-cell wall loops on NACA midlines (0…5 webs).
 
@@ -15,7 +15,7 @@ Run from the repository root::
 
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/void_cell_wall_loops_demo.py
 
-Outputs default to ``examples/output/void_cell_wall_loops/``.
+Outputs default to ``visualisation/output/void_cell_wall_loops/``.
 """
 
 from __future__ import annotations
@@ -35,6 +35,12 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
@@ -73,7 +79,7 @@ _LOOP_STYLES: tuple[tuple[str, str], ...] = (
 )
 
 _FIGSIZE = (14.5, 5.8)
-_DPI = 260
+_DPI = DEFAULT_DPI
 
 
 def _build_section(
@@ -299,7 +305,7 @@ def _plot_section_with_loops(ax, section, grid, strips, loops, title: str) -> No
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

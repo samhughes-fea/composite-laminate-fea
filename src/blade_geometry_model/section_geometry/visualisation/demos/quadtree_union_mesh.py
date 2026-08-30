@@ -1,5 +1,5 @@
 """
-examples/quadtree_union_mesh.py
+visualisation/demos/quadtree_union_mesh.py
 ===============================
 Hybrid demo: build section geometry from the orchestration ``SYSTEM_TYPE_KEYS``
 registry, then build ONE adaptive quadtree refined to the UNION of all
@@ -13,7 +13,7 @@ By default renders **all 40** registered layout keys (``0A``, ``0B``, and every
 multicell ``{X}{Y}-{Z}`` token) at **15 deg** section twist (``--twist-deg``),
 including skin-only layouts, chord-normal webs, and flapwise webs.
 
-Outputs under ``examples/output/quadtree_union/``:
+Outputs under ``visualisation/output/quadtree_union/``:
 
   * ``quadtree_union_{key}.png`` per layout (e.g. ``quadtree_union_2D-CN.png``)
   * ``quadtree_union_summary.json`` — coverage metadata and leaf counts
@@ -51,6 +51,12 @@ def _load_sibling_module(name: str, filename: str):
 
 _ensure_mod = _load_sibling_module("_ensure_repo_path", "_ensure_repo_path.py")
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 _taxonomy = _load_sibling_module("_taxonomy_cases", "_taxonomy_cases.py")
 airfoil_for_twist = _taxonomy.airfoil_for_twist
 system_type_display_name = _taxonomy.system_type_display_name
@@ -142,7 +148,7 @@ def render_case(
     png_name = f"quadtree_union_{key}.png"
     out_png = out_dir / png_name
     if save_figure:
-        fig.savefig(out_png, dpi=160, bbox_inches="tight")
+        save_figure(fig, out_png)
         print(f"Wrote {out_png}  (leaves={len(leaves)})")
     plt.close(fig)
 

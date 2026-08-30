@@ -30,6 +30,14 @@ def _load_sibling(name: str, filename: str):
 _ensure_mod = _load_sibling("_ensure_repo_path", "_ensure_repo_path.py")
 repo_root = _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    PRESENTATION_DPI,
+    apply_presentation_style,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_precompute.module.section_selection.processing.adapters.scale_adapter import (
     airfoil_sdf_from_station,
 )
@@ -319,7 +327,7 @@ def _render_anchoring_cascade(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(source_idx)
@@ -427,7 +435,7 @@ def _render_key_cascade_spanwise(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(pos)
@@ -488,7 +496,7 @@ def _render_topology_twist(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(source_idx)
@@ -576,7 +584,7 @@ def _render_orientation_comparator(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(source_idx)
@@ -676,7 +684,7 @@ def _render_insert_dynamics(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(source_idx)
@@ -747,7 +755,7 @@ def _render_quadtree_refinement(
 
         frame_file = frame_path(paths.frame_dir, out_idx)
         fig.tight_layout(rect=[0.0, 0.04, 1.0, 0.95])
-        fig.savefig(frame_file, dpi=profile.dpi, bbox_inches="tight", facecolor="white")
+        save_figure(fig, frame_file, dpi=profile.dpi)
         plt.close(fig)
         frame_files.append(frame_file)
         source_indices.append(source_idx)
@@ -818,12 +826,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Skip post-render GIF metadata validation.",
     )
+    parser.add_argument(
+        "--presentation",
+        action="store_true",
+        help="Larger fonts and higher DPI for slides/decks.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
+    from dataclasses import replace
+
     args = parse_args(argv)
+    apply_presentation_style(bool(args.presentation))
     profile = PROFILES[str(args.profile)]
+    if bool(args.presentation) and int(profile.dpi) < PRESENTATION_DPI:
+        profile = replace(profile, dpi=PRESENTATION_DPI)
     scenario_names = _selected_scenarios(str(args.scenario))
     context = FlythroughContext(repo_root=Path(repo_root), rotor=str(args.rotor))
 

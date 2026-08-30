@@ -1,5 +1,5 @@
 """
-examples/thickness_as_field_offset_demo.py
+visualisation/demos/thickness_as_field_offset_demo.py
 ==========================================
 Wall thickness is a field operation, not a mesh operation.
 
@@ -47,6 +47,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     SDFGrid,
@@ -62,7 +68,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sections.clip
     airfoil_expr,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 
 def _to_key(label) -> str:
@@ -71,7 +77,7 @@ def _to_key(label) -> str:
 
 def _save(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

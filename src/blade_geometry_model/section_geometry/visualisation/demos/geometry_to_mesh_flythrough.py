@@ -1,5 +1,5 @@
 """
-examples/geometry_to_mesh_flythrough.py
+visualisation/demos/geometry_to_mesh_flythrough.py
 =======================================
 The handoff that makes the implicit representation useful: solids -> shell mesh.
 
@@ -72,6 +72,14 @@ def _load_sibling(name: str, filename: str):
 
 _ensure_mod = _load_sibling("_ensure_repo_path", "_ensure_repo_path.py")
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    PRESENTATION_DPI,
+    apply_presentation_style,
+    demo_output_dir,
+    save_figure,
+)
 
 # The render/specs helpers use plain sibling imports and dataclasses, so they
 # have to be imported normally rather than exec'd out of a spec - a module
@@ -778,17 +786,18 @@ def render_frame(
 
     draw_sidebar(axis_side, context, headline, weights)
 
-    figure.savefig(
+    save_figure(
+        figure,
         out_path,
         dpi=int(profile.dpi),
-        facecolor="white",
-        bbox_inches="tight",
         pad_inches=0.18,
     )
     plt.close(figure)
 
 
-def render_static_strip(context: PipelineContext, out_path: Path) -> None:
+def render_static_strip(
+    context: PipelineContext, out_path: Path, *, presentation: bool = False
+) -> None:
     """The same four stages side by side, for slides that cannot play a GIF."""
     figure, axes = plt.subplots(2, 4, figsize=(19.0, 8.4))
     metrics = context.stage_metrics
@@ -841,7 +850,7 @@ def render_static_strip(context: PipelineContext, out_path: Path) -> None:
         fontsize=14,
     )
     figure.tight_layout(rect=(0, 0.01, 1, 0.93))
-    figure.savefig(out_path, dpi=170, facecolor="white", bbox_inches="tight")
+    save_figure(figure, out_path, presentation=presentation)
     plt.close(figure)
     print(f"Wrote {out_path}")
 
@@ -958,17 +967,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-frames", type=int, default=None)
     parser.add_argument("--no-gif", action="store_true", help="Render frames only.")
     parser.add_argument("--out-dir", type=Path, default=None)
+    parser.add_argument(
+        "--presentation",
+        action="store_true",
+        help="Larger fonts and higher DPI for slides/decks.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    out_dir = args.out_dir or (
-        Path(__file__).resolve().parents[1] / "output" / "geometry_to_mesh"
-    )
+    apply_presentation_style(bool(args.presentation))
+    out_dir = args.out_dir or demo_output_dir("geometry_to_mesh")
+    out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     profile = _specs.PROFILES[str(args.profile)]
+    if bool(args.presentation) and int(profile.dpi) < PRESENTATION_DPI:
+        from dataclasses import replace
+
+        profile = replace(profile, dpi=PRESENTATION_DPI)
     context = build_context(args)
     print(
         f"Built {context.key}: {len(context.phi_by_label)} regions, "
@@ -977,7 +995,9 @@ def main(argv: list[str] | None = None) -> int:
         f"{context.mesh.n_total_elements} elements"
     )
 
-    render_static_strip(context, out_dir / "geometry_to_mesh_stages.png")
+    render_static_strip(
+        context, out_dir / "geometry_to_mesh_stages.png", presentation=bool(args.presentation)
+    )
 
     paths = _render.prepare_scenario_paths(
         out_dir, "geometry_to_mesh", "geometry_to_mesh_flythrough.gif"

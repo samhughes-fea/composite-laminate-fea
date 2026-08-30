@@ -1,5 +1,5 @@
 ﻿"""
-examples/sensitivity_dashboard_demo.py
+visualisation/demos/sensitivity_dashboard_demo.py
 =====================================
 Finite-difference sensitivity dashboard for implicit section geometry.
 
@@ -26,6 +26,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     SDFGrid,
@@ -42,7 +48,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     plot_section,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 
 def _totals(props: dict[str, dict[str, float]]) -> dict[str, float]:
@@ -187,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
     fig.suptitle("Sensitivity dashboard (implicit CSG section geometry)", fontsize=14)
     fig.tight_layout()
     out_png = out_dir / "sensitivity_dashboard.png"
-    fig.savefig(out_png, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, out_png)
     plt.close(fig)
     print(f"Wrote {out_png}")
 

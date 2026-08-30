@@ -1,5 +1,5 @@
 """
-examples/sdf_metric_quality_demo.py
+visualisation/demos/sdf_metric_quality_demo.py
 ===================================
 Computational-geometry demo: metric SDF quality and CSG-seam ridges.
 
@@ -39,6 +39,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     MultiCellSection,
@@ -49,7 +55,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.csg import union_all
 
-_DPI = 220
+_DPI = DEFAULT_DPI
 _BAND_M = 0.02  # exclude a thin band around φ=0 from residual stats
 _RIDGE_GRAD = 0.55
 
@@ -106,7 +112,7 @@ def _ridge_xy(grid: SDFGrid, gm: np.ndarray, phi: np.ndarray) -> np.ndarray:
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

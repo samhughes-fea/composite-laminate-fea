@@ -1,5 +1,5 @@
 ﻿"""
-examples/robustness_monte_carlo_demo.py
+visualisation/demos/robustness_monte_carlo_demo.py
 =======================================
 Randomized robustness sweep for implicit section geometry.
 
@@ -26,6 +26,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     build_section_view,
@@ -38,7 +44,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.pr
     compute_section_properties,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 
 def _safe_float(v: float) -> float | None:
@@ -174,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
 
     out_png = out_dir / "robustness_monte_carlo.png"
     fig.tight_layout()
-    fig.savefig(out_png, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, out_png)
     plt.close(fig)
     print(f"Wrote {out_png}")
 

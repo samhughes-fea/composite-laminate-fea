@@ -1,5 +1,5 @@
 """
-examples/le_te_exactness_demo.py
+visualisation/demos/le_te_exactness_demo.py
 ================================
 Demonstrate LE/TE geometric exactness of the implicit / constructive kernel.
 
@@ -15,7 +15,7 @@ Run from the repository root::
 
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/le_te_exactness_demo.py
 
-Outputs default to ``examples/output/le_te_exactness/``.
+Outputs default to ``visualisation/output/le_te_exactness/``.
 """
 
 from __future__ import annotations
@@ -35,6 +35,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     MultiCellSection,
@@ -52,7 +58,7 @@ from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     section_plot_axes,
 )
 
-_DPI = 220
+_DPI = DEFAULT_DPI
 
 
 def _build_section(af: AirfoilSDF, *, twist_rad: float = 0.0) -> MultiCellSection:
@@ -118,7 +124,7 @@ def _skin_midline_te_gap_from_mid(mid: np.ndarray, af: AirfoilSDF) -> dict:
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

@@ -1,5 +1,5 @@
 """
-examples/manystation_bench.py
+visualisation/demos/manystation_bench.py
 =============================
 Many-station throughput benchmark for the section_geometry property backend.
 
@@ -13,6 +13,12 @@ Run from the repository root:
 """
 
 from __future__ import annotations
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 import argparse
 import importlib.util
@@ -103,7 +109,7 @@ def _run_bench(args, backend: str) -> dict:
                 fig, _ = plot_section_hybrid(section, mesh)
             else:
                 fig, _ = plot_section_from_mesh(mesh)
-            fig.savefig(tmp / f"station_{i:03d}.png", dpi=170)
+            save_figure(fig, tmp / f"station_{i:03d}.png")
             plt.close(fig)
             stage_s["plot"] += time.perf_counter() - t
 

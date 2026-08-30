@@ -1,5 +1,5 @@
 """
-examples/evaluation_cost_pruning_demo.py
+visualisation/demos/evaluation_cost_pruning_demo.py
 ========================================
 Why the implicit path is cheap: shared subtrees and analytic support boxes.
 
@@ -50,6 +50,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     SDFGrid,
@@ -64,7 +70,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     _component_color,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 _OPERATOR_COLOR = "#2f6f9f"
 _LEAF_COLOR = "#c2703d"
@@ -77,7 +83,7 @@ def _to_key(label) -> str:
 
 def _save(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

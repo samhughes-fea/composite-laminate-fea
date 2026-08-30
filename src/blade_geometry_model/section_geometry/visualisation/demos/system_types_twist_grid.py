@@ -1,5 +1,5 @@
 """
-examples/system_types_twist_grid.py
+visualisation/demos/system_types_twist_grid.py
 ===================================
 Visualise section geometry on a **3×4** grid (**chord-fraction presets** × **1…4 webs**)
 and **two** web-alignment panels (**chord-normal** vs **flapwise**) at a fixed twist (default 20°).
@@ -47,6 +47,12 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
@@ -108,7 +114,7 @@ def main() -> int:
         "--out-dir",
         type=Path,
         default=None,
-        help="Output directory (default: examples/output/system_types_twist_grid).",
+        help="Output directory (default: visualisation/output/system_types_twist_grid).",
     )
     p.add_argument(
         "--no-section-jsons",
@@ -296,7 +302,7 @@ def main() -> int:
     plt.subplots_adjust(bottom=0.08)
 
     out_png = out_dir / f"system_types_ABC_twist{args.twist_deg:g}deg.png"
-    fig.savefig(out_png, dpi=int(args.dpi), bbox_inches="tight")
+    save_figure(fig, out_png, dpi=int(args.dpi))
     plt.close(fig)
     print(f"Wrote {out_png}")
 

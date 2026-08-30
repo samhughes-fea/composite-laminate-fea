@@ -1,5 +1,5 @@
 """
-examples/quadtree_convergence_study.py
+visualisation/demos/quadtree_convergence_study.py
 ======================================
 Quadtree depth / section-property convergence study.
 
@@ -40,6 +40,12 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.area_mesh import section_properties_via_quadtree
 from blade_structure_utilities.geometry_utilities.section_geometry import (
@@ -275,7 +281,7 @@ def render_convergence_figure(
     )
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_png, dpi=160, bbox_inches="tight")
+    save_figure(fig, out_png)
     plt.close(fig)
 
 

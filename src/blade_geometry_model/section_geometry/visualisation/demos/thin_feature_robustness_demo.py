@@ -1,5 +1,5 @@
 """
-examples/thin_feature_robustness_demo.py
+visualisation/demos/thin_feature_robustness_demo.py
 ========================================
 Computational-geometry demo: knife-edge web capsules under twist.
 
@@ -43,6 +43,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     MultiCellSection,
@@ -68,7 +74,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.pr
 )
 from blade_structure_utilities.mesh_utilities.area_2d.quadrature import label_boundary_segments
 
-_DPI = 220
+_DPI = DEFAULT_DPI
 # Floor is MIN_REALISTIC_WEB_LAMINATE_THICKNESS_M (4 mm); request that minimum.
 _WEB_T = 0.004
 _DEPTHS = (4, 5, 6, 7, 8)
@@ -106,7 +112,7 @@ def _web_centroid(section: MultiCellSection) -> np.ndarray:
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

@@ -1,5 +1,5 @@
 """
-examples/section_properties_dashboard.py
+visualisation/demos/section_properties_dashboard.py
 ========================================
 Section-property analysis dashboard for the hybrid geometry kernel.
 
@@ -32,6 +32,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     CoordinateFrameTransforms,
 )
@@ -49,7 +55,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.pr
     compute_section_properties,
 )
 
-_DPI = 200
+_DPI = DEFAULT_DPI
 _TWIST_DEG = 15.0
 _LABEL_ORDER = (
     "skin_suction_surface",
@@ -129,7 +135,7 @@ def _sum_props(props: dict[str, dict[str, float]], labels: list[str]) -> dict[st
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

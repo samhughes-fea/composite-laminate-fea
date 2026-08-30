@@ -1,5 +1,5 @@
 """
-examples/structural_family_grids_demo.py
+visualisation/demos/structural_family_grids_demo.py
 =======================================
 One PNG per structural system (registry ``SYSTEM_TYPE_KEYS``).
 
@@ -46,6 +46,14 @@ def _load_sibling(name: str, filename: str):
 
 _ensure_mod = _load_sibling("_ensure_repo_path", "_ensure_repo_path.py")
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    add_output_and_presentation_args,
+    apply_presentation_style,
+    demo_output_dir,
+    save_figure,
+)
 _taxonomy = _load_sibling("_taxonomy_cases", "_taxonomy_cases.py")
 
 from blade_structure_utilities.geometry_utilities.section_geometry.api.factory import (
@@ -58,7 +66,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import AirfoilSDF
 
-_DPI = 160
+_DPI = DEFAULT_DPI
 _FAMILIES = ("A", "B", "C", "D")
 # Match ``plot_section`` / naca2412 twin-web & torsion-box figure shape.
 _FIGSIZE = (12.0, 5.0)
@@ -100,6 +108,7 @@ def _render_system(
     airfoil: AirfoilSDF,
     twist_deg: float,
     out_dir: Path,
+    presentation: bool = False,
 ) -> dict[str, Any]:
     layout = resolve_system_type(key)
     twist_use = _taxonomy.twist_deg_for_layout(layout, twist_deg=twist_deg)
@@ -123,7 +132,7 @@ def _render_system(
     fig.tight_layout()
 
     out_png = out_dir / _png_name(key)
-    fig.savefig(out_png, dpi=_DPI, facecolor="white", bbox_inches="tight")
+    save_figure(fig, out_png, presentation=presentation)
     plt.close(fig)
     print(f"Wrote {out_png}")
     return {
@@ -138,8 +147,8 @@ def _render_system(
 
 
 def main(argv: list[str] | None = None) -> int:
-    default_out = _EXAMPLES_DIR.parent / "output" / "structural_family_grids"
     p = argparse.ArgumentParser(description=__doc__)
+    add_output_and_presentation_args(p, default_stem="structural_family_grids")
     p.add_argument("--twist-deg", type=float, default=15.0)
     p.add_argument("--naca", default="2412")
     p.add_argument("--chord", type=float, default=1.0)
@@ -155,10 +164,10 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Explicit SystemType keys (overrides --families when set).",
     )
-    p.add_argument("--out-dir", type=Path, default=default_out)
     args = p.parse_args(argv)
+    apply_presentation_style(bool(args.presentation))
 
-    out_dir: Path = args.out_dir
+    out_dir: Path = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     af = AirfoilSDF.from_naca(args.naca, n_points=140, chord=float(args.chord))
     by_fam = _keys_by_family()
@@ -190,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
                 airfoil=af,
                 twist_deg=float(args.twist_deg),
                 out_dir=out_dir,
+                presentation=bool(args.presentation),
             )
         )
 

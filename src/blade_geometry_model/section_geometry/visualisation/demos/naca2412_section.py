@@ -1,5 +1,5 @@
 """
-examples/naca2412_section.py
+visualisation/demos/naca2412_section.py
 ============================
 End-to-end demonstration of the section_geometry package.
 
@@ -12,21 +12,17 @@ Demonstrates:
   5.  Section properties report
   6.  Per-component SDF fields
 
-Run from the package root:
-    python examples/naca2412_section.py
-
-For thickness-only geometry (no properties sweep), see
-``geometry_from_design_vector.py``.
-
-Requirements: numpy, scipy, matplotlib, scikit-image
-Optional:     scikit-fmm  (Eikonal redistancing)
-
-Run with either::
+Run from the repository root::
 
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/naca2412_section.py
 
-(from the repository root), or after ``pip install -e .`` from the repo root.
+Outputs under ``visualisation/output/naca2412_section/``.
+
+For thickness-only geometry (no properties sweep), see
+``geometry_from_design_vector.py``.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 import importlib.util
@@ -41,7 +37,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
-import os
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    add_output_and_presentation_args,
+    apply_presentation_style,
+    save_figure,
+)
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -64,8 +65,15 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     blade_plot_sampling_grid,
 )
 
-OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
-os.makedirs(OUTPUT, exist_ok=True)
+import argparse
+
+_parser = argparse.ArgumentParser(description=__doc__)
+add_output_and_presentation_args(_parser, default_stem="naca2412_section")
+_args = _parser.parse_args()
+apply_presentation_style(bool(_args.presentation))
+_PRESENTATION = bool(_args.presentation)
+OUTPUT = Path(_args.out_dir)
+OUTPUT.mkdir(parents=True, exist_ok=True)
 
 
 def _build_torsion_box(af: AirfoilSDF, *, twist_rad: float, web_alignment: str) -> MultiCellSection:
@@ -104,10 +112,10 @@ def _save_torsion_section_plot(
     ax.plot(0.0, 0.0, "k+", ms=10, mew=1.5, label="pitch axis (origin)")
     ax.legend(fontsize=7, loc="upper right")
     fig.tight_layout()
-    path = os.path.join(OUTPUT, out_name)
-    fig.savefig(path, dpi=150)
+    path = OUTPUT / out_name
+    save_figure(fig, path, presentation=_PRESENTATION)
     plt.close(fig)
-    print(f"  Saved: output/{out_name}")
+    print(f"  Saved: {path}")
 
 
 # =============================================================================
@@ -161,9 +169,9 @@ ax.plot(h_c, v_c, "k--", lw=1.2, label="camber line")
 ax.plot(0.0, 0.0, "k+", ms=10, mew=1.5, label="pitch axis (origin)")
 ax.legend(fontsize=7, loc="upper right")
 fig.tight_layout()
-fig.savefig(os.path.join(OUTPUT, "twin_web_section.png"), dpi=150)
+save_figure(fig, OUTPUT / "twin_web_section.png", presentation=_PRESENTATION)
 plt.close(fig)
-print("  Saved: output/twin_web_section.png")
+print(f"  Saved: {OUTPUT / 'twin_web_section.png'}")
 
 
 # =============================================================================
@@ -312,9 +320,9 @@ fig.suptitle(
     fontsize=11,
 )
 fig.tight_layout()
-fig.savefig(os.path.join(OUTPUT, "component_sdfs_torsion.png"), dpi=150)
+save_figure(fig, OUTPUT / "component_sdfs_torsion.png", presentation=_PRESENTATION)
 plt.close(fig)
-print("  Saved: output/component_sdfs_torsion.png")
+print(f"  Saved: {OUTPUT / 'component_sdfs_torsion.png'}")
 
 
 # =============================================================================
@@ -323,13 +331,13 @@ print("  Saved: output/component_sdfs_torsion.png")
 
 print("\n--- Exporting data ---------------------------------------")
 
-report_torsion.to_json(os.path.join(OUTPUT, "section_properties_torsion.json"))
-report_torsion.to_csv(os.path.join(OUTPUT, "section_properties_torsion.csv"))
+report_torsion.to_json(str(OUTPUT / "section_properties_torsion.json"))
+report_torsion.to_csv(str(OUTPUT / "section_properties_torsion.csv"))
 export_section_json(
     torsion,
     grid_tors,
     {},
-    os.path.join(OUTPUT, "section_full_torsion.json"),
+    str(OUTPUT / "section_full_torsion.json"),
 )
 
 print("  Exported: section_properties_torsion.json/csv")

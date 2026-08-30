@@ -1,5 +1,5 @@
 """
-examples/topology_twist_stability_demo.py
+visualisation/demos/topology_twist_stability_demo.py
 =========================================
 Computational-geometry demo: shell topology stability under twist.
 
@@ -36,6 +36,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     MultiCellSection,
@@ -53,7 +59,7 @@ from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     section_plot_axes,
 )
 
-_DPI = 220
+_DPI = DEFAULT_DPI
 _TWIST_DEG = (0.0, 5.0, 10.0, 15.0, 30.0)
 
 
@@ -140,7 +146,7 @@ def _overlay_strips(ax, strips, *, lw: float = 1.8) -> None:
 
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

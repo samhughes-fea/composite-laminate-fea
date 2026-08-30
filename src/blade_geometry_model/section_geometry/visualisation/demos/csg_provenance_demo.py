@@ -1,5 +1,5 @@
 ﻿"""
-examples/csg_provenance_demo.py
+visualisation/demos/csg_provenance_demo.py
 ===============================
 Demonstrate implicit-CSG component interactions via distance-field diagnostics.
 
@@ -29,6 +29,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     SDFGrid,
@@ -44,7 +50,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     rotated_naca_grid_to_section_plot_axes,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 
 def _to_key(label) -> str:
@@ -54,7 +60,7 @@ def _to_key(label) -> str:
 def _save(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

@@ -1,5 +1,5 @@
 """
-examples/constructive_vs_quadtree_spike.py
+visualisation/demos/constructive_vs_quadtree_spike.py
 =========================================
 WP1 spike: constructive laminate polygons + shoelace vs full-label quadtree.
 

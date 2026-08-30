@@ -1,5 +1,5 @@
 """
-examples/shell_junction_topology_demo.py
+visualisation/demos/shell_junction_topology_demo.py
 =======================================
 Demonstrate constructive shell midline junction topology.
 
@@ -15,7 +15,7 @@ Run from the repository root::
 
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/shell_junction_topology_demo.py
 
-Outputs default to ``examples/output/shell_junction_topology/``.
+Outputs default to ``visualisation/output/shell_junction_topology/``.
 """
 
 from __future__ import annotations
@@ -34,6 +34,14 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    add_output_and_presentation_args,
+    apply_presentation_style,
+    demo_output_dir,
+    save_figure,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
@@ -55,7 +63,7 @@ from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     section_plot_axes,
 )
 
-_DPI = 220
+_DPI = DEFAULT_DPI
 _FIGSIZE_FULL = (14.0, 5.5)
 _FIGSIZE_ZOOM = (14.0, 10.0)
 
@@ -222,24 +230,19 @@ def _mark_points(ax, points: list[np.ndarray], *, colour: str, label: str) -> No
     )
 
 
-def _save_fig(fig, path: Path) -> None:
+def _save_fig(fig, path: Path, *, presentation: bool = False) -> None:
     fig.tight_layout()
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path, presentation=presentation)
     plt.close(fig)
     print(f"Wrote {path}")
 
 
 def main(argv: list[str] | None = None) -> Path:
-    default_out = Path(__file__).resolve().parents[1] / "output" / "shell_junction_topology"
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--out-dir",
-        type=Path,
-        default=default_out,
-        help=f"Output directory (default: {default_out})",
-    )
+    add_output_and_presentation_args(parser, default_stem="shell_junction_topology")
     args = parser.parse_args(argv)
-    out_dir: Path = args.out_dir
+    apply_presentation_style(bool(args.presentation))
+    out_dir: Path = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     af = AirfoilSDF.from_naca("2412", chord=1.0)
@@ -259,7 +262,7 @@ def main(argv: list[str] | None = None) -> Path:
         ax=axes[1],
         title="After build_shell_strip_topology\n(skin split + cap–web T nodes)",
     )
-    _save_fig(fig, out_dir / "topology_before_after.png")
+    _save_fig(fig, out_dir / "topology_before_after.png", presentation=bool(args.presentation))
 
     # --- junction metrics ---
     gaps_raw = _web_skin_gaps(raw)
@@ -322,7 +325,7 @@ def main(argv: list[str] | None = None) -> Path:
         "Shell junction zooms - shared vertices after topology prep (NACA 2412 3-web box)",
         fontsize=12,
     )
-    _save_fig(fig2, out_dir / "topology_junction_zooms.png")
+    _save_fig(fig2, out_dir / "topology_junction_zooms.png", presentation=bool(args.presentation))
 
     payload = {
         "airfoil": "NACA 2412",

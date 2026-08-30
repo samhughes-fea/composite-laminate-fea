@@ -1,5 +1,5 @@
 """
-examples/skin_ss_ps_taxonomy_demo.py
+visualisation/demos/skin_ss_ps_taxonomy_demo.py
 ====================================
 Demonstrate nested outer-skin taxonomy: suction/pressure solids and
 leading_edge / bay / trailing_edge arcs.
@@ -32,6 +32,11 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     section_plot_axes,
 )
@@ -50,7 +55,6 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     plot_shell_midline_strip_topology,
 )
 
-_DPI = 220
 _ARC_COLOUR = {
     ("suction_surface", "leading_edge"): "#0D47A1",
     ("suction_surface", "bay"): "#1976D2",
@@ -95,7 +99,7 @@ def main(argv: list[str] | None = None) -> Path:
     )
     fig.tight_layout()
     path1 = out_dir / "skin_ss_ps_section.png"
-    fig.savefig(path1, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path1)
     plt.close(fig)
     print(f"Wrote {path1}")
 
@@ -121,7 +125,7 @@ def main(argv: list[str] | None = None) -> Path:
     ax2.legend(fontsize=7, loc="best", ncol=2)
     fig2.tight_layout()
     path2 = out_dir / "skin_ss_ps_midline_arcs.png"
-    fig2.savefig(path2, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig2, path2)
     plt.close(fig2)
     print(f"Wrote {path2}")
 

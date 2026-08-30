@@ -1,5 +1,5 @@
 """
-examples/geometry_from_design_vector.py
+visualisation/demos/geometry_from_design_vector.py
 =======================================
 Build and plot 2-D section **computational geometry** from laminate thicknesses
 and layout only — no structural / aerodynamic solves.
@@ -37,6 +37,12 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 
 def _parse_float_list(s: str) -> list[float]:
@@ -106,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
         "--out-dir",
         type=Path,
         default=None,
-        help="Output directory (default: examples/output/design_vector).",
+        help="Output directory (default: visualisation/output/design_vector).",
     )
     p.add_argument("--json", action="store_true", help="Write design_vector.json next to the PNG.")
     p.add_argument(
@@ -215,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     fig, ax = plot_section(section, grid, title=title, show_airfoil=False)
     fig.tight_layout()
     png = out_dir / "section_design_vector.png"
-    fig.savefig(png, dpi=170, bbox_inches="tight")
+    save_figure(fig, png)
     try:
         import matplotlib.pyplot as plt
 

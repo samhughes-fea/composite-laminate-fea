@@ -1,5 +1,5 @@
 """
-examples/sdf_operator_algebra_demo.py
+visualisation/demos/sdf_operator_algebra_demo.py
 =====================================
 The whole shape language, one line of numpy per operator.
 
@@ -42,6 +42,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 from blade_structure_utilities.geometry_utilities.section_geometry import SDFGrid
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.csg import (
     blend,
@@ -61,7 +67,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import
     eval_expr_batch,
 )
 
-_DPI = 190
+_DPI = DEFAULT_DPI
 
 # Operand shapes reused across every panel so the reader compares operators,
 # not inputs. Deliberately overlapping.
@@ -72,7 +78,7 @@ _BAR_SHAPE = Capsule(ax=-0.55, ay=-0.30, bx=0.55, by=0.30, r=0.16)
 
 def _save(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=_DPI, bbox_inches="tight", facecolor="white")
+    save_figure(fig, path)
     plt.close(fig)
     print(f"Wrote {path}")
 

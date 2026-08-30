@@ -1,5 +1,5 @@
 """
-examples/quadtree_vs_shoelace_convergence_study.py
+visualisation/demos/quadtree_vs_shoelace_convergence_study.py
 ====================================================
 Quadtree vs shoelace (exact polygon) section-property comparison.
 
@@ -54,6 +54,12 @@ _ensure_mod = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
 
 # Load the existing quadtree convergence study as a module so its
 # section-building / grid-reference / depth-sweep logic is reused verbatim
@@ -250,7 +256,7 @@ def render_comparison_figure(
     fig.suptitle(f"Quadtree vs shoelace — {tag} (twist={twist_deg:g} deg)", fontsize=11)
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_png, dpi=160, bbox_inches="tight")
+    save_figure(fig, out_png)
     plt.close(fig)
 
 

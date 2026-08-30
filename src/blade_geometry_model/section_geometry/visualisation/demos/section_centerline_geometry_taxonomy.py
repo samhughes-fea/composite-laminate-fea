@@ -32,6 +32,12 @@ assert _spec.loader is not None
 _spec.loader.exec_module(_ensure_mod)
 _ensure_mod.ensure_repo_path()
 
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    demo_output_dir,
+    save_figure,
+)
+
 
 def _all_layout_keys() -> tuple[str, ...]:
     from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
@@ -130,7 +136,7 @@ def _save_subcomponent_figure(
         fontsize=11,
     )
     fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.90))
-    fig.savefig(outfile, dpi=dpi, facecolor="#0f1117", bbox_inches="tight")
+    save_figure(fig, outfile, dpi=dpi, facecolor="#0f1117")
     plt.close(fig)
     return outfile
 
