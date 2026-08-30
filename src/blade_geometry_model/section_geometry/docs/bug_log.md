@@ -632,13 +632,13 @@ Worst case over the SG-005 sweep (81 configurations, 789 interior crossings):
 `spar_cap_suction_surface_1`. Measured identically before and after the SG-005
 fix.
 
-On that case the production detector finds one crossing whose solved point lies
-**0.89 µm** from an existing skin-ray-resampled cap vertex. With
-`vertex_coincide_tol_m = 1e-6` the insert was skipped, so the cap kept the
-nearby sample instead of the true junction. Separately, the absolute merge floor
-`_CAP_WEB_JUNCTION_MERGE_ARC_M = 1e-6` could also collapse two crossings closer
-than 1 µm on a short cap (same absolute-tolerance pattern as the old
-`_MERGE_S_TOL_M`).
+On that case the then-production polyline×polyline detector finds one crossing
+whose solved point lies **0.89 µm** from an existing skin-ray-resampled cap
+vertex. With `vertex_coincide_tol_m = 1e-6` the insert was skipped, so the cap
+kept the nearby sample instead of the true junction. Separately, the absolute
+merge floor `_CAP_WEB_JUNCTION_MERGE_ARC_M = 1e-6` could also collapse two
+crossings closer than 1 µm on a short cap (same absolute-tolerance pattern as
+the old `_MERGE_S_TOL_M`).
 
 ### Root cause
 
