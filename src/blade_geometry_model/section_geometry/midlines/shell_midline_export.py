@@ -17,6 +17,8 @@ cares about a canonical ordering (e.g. ``skin → caps → webs`` as required by
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -221,8 +223,130 @@ def build_shell_midline_strips(
             )
         )
 
+    return tuple(_insert_web_cap_junction_nodes(strips))
 
-    return tuple(strips)
+
+def _insert_web_cap_junction_nodes(
+    strips: list[ShellMidlineStrip],
+) -> list[ShellMidlineStrip]:
+    """Put a node on **both** strips wherever a web crosses a cap.
+
+    Webs and caps are sampled independently, so a junction between them lands
+    part-way along a segment of one or both and no shared node exists. Before
+    this pass the mesh held together only because ``section_mesh`` clusters
+    endpoints within ``ENDPOINT_TOL_FRAC`` — 0.6 % of chord, 6 mm at 1 m —
+    with measured gaps of 1.88 mm at cap ends and 1.95 mm at interior
+    crossings. That is a tolerance scaled by *chord*, not by mesh density, so
+    refining the mesh erodes the margin instead of improving it.
+
+    Both junction kinds are the same computation: intersect the web's axis with
+    the cap polyline. Nothing is relocated and no membership tolerance is
+    needed — the crossing is solved for rather than searched for.
+
+    Only the **web** is given nodes here. The cap's interior is rebuilt later by
+    ``resample_cap_interiors_from_skin_rays``, which would discard anything
+    inserted at this stage; the cap side is closed afterwards by
+    ``insert_cap_web_interior_junctions``, once its polyline is final.
+    Inserting into the web is exact because a web midline is straight.
+    """
+    web_indices = [i for i, s in enumerate(strips) if s.kind == "web"]
+    cap_indices = [i for i, s in enumerate(strips) if s.kind == "cap"]
+    if not web_indices or not cap_indices:
+        return strips
+
+    points_along_web: dict[int, list[float]] = {}
+
+    for web_index in web_indices:
+        web_points = np.asarray(
+            strips[web_index].midline_twisted_pitch_axis_blade_frame, dtype=float
+        )
+        if web_points.shape[0] < 2:
+            continue
+        start = web_points[0]
+        axis = web_points[-1] - start
+        axis_length = float(np.linalg.norm(axis))
+        if axis_length <= 1e-12:
+            continue
+        direction = axis / axis_length
+
+        for cap_index in cap_indices:
+            cap_points = np.asarray(
+                strips[cap_index].midline_twisted_pitch_axis_blade_frame, dtype=float
+            )
+            if cap_points.shape[0] < 2:
+                continue
+            segment_start = cap_points[:-1]
+            segment = cap_points[1:] - segment_start
+
+            denominator = (
+                segment[:, 0] * direction[1] - segment[:, 1] * direction[0]
+            )
+            usable = np.abs(denominator) > 1e-14
+            if not np.any(usable):
+                continue
+            safe = np.where(usable, denominator, 1.0)
+            offset = start - segment_start
+            along_segment = (
+                offset[:, 0] * direction[1] - offset[:, 1] * direction[0]
+            ) / safe
+            crossing = segment_start + along_segment[:, None] * segment
+            along_axis = (crossing - start) @ direction
+
+            hit = (
+                usable
+                & (along_segment >= -1e-12)
+                & (along_segment <= 1.0 + 1e-12)
+                & (along_axis >= -1e-12)
+                & (along_axis <= axis_length + 1e-12)
+            )
+            for segment_index in np.flatnonzero(hit):
+                t_axis = float(along_axis[segment_index])
+                u_segment = float(np.clip(along_segment[segment_index], 0.0, 1.0))
+                crossing_point = (
+                    segment_start[segment_index]
+                    + u_segment * segment[segment_index]
+                )
+                # Only junctions at a cap **end** are handled here. Interior
+                # crossings must not be: inserting a web vertex exactly on the
+                # cap makes the two polylines touch rather than cross, and
+                # `insert_cap_web_interior_junctions` — which finds interior
+                # junctions by polyline-polyline intersection after the cap has
+                # been resampled — then stops finding them. Measured: doing it
+                # here moved the web gap to 0 but pushed the cap gap from 0 to
+                # 1056 um on 4D-F. See docs/bug_log.md.
+                at_cap_end = (
+                    min(
+                        float(np.linalg.norm(crossing_point - cap_points[0])),
+                        float(np.linalg.norm(crossing_point - cap_points[-1])),
+                    )
+                    <= 1e-9
+                )
+                if at_cap_end and 1e-9 < t_axis < axis_length - 1e-9:
+                    points_along_web.setdefault(web_index, []).append(t_axis)
+
+    if not points_along_web:
+        return strips
+
+    out = list(strips)
+
+    for web_index, parameters in points_along_web.items():
+        web_points = np.asarray(
+            strips[web_index].midline_twisted_pitch_axis_blade_frame, dtype=float
+        )
+        start = web_points[0]
+        direction = web_points[-1] - start
+        direction = direction / float(np.linalg.norm(direction))
+        existing = (web_points - start) @ direction
+        merged = np.unique(
+            np.round(np.concatenate([existing, np.asarray(parameters)]), 12)
+        )
+        out[web_index] = replace(
+            out[web_index],
+            midline_twisted_pitch_axis_blade_frame=start
+            + merged[:, None] * direction,
+        )
+
+    return out
 
 
 __all__ = [

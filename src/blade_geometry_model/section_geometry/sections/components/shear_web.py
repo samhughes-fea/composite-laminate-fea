@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from blade_structure_utilities.geometry_utilities.section_geometry.sdf.csg import offset
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import Capsule, Intersect, Offset
 
 from ..clips import airfoil_expr
@@ -77,11 +78,61 @@ class ShearWeb(SectionComponent):
         )
         super().__init__(expr)
 
+    def _extend_to_skin_mid_surface(self, anchor, direction):
+        """Walk ``anchor`` outward along ``direction`` onto the skin mid-surface.
+
+        The anchors are inner-mould-line intercepts — the right locus for
+        building the *solid*, but half a skin gauge short of where the web's
+        **mid-surface** actually ends. A web mid-surface runs mid-surface to
+        mid-surface; emitting it to the IML leaves it short at both ends and
+        forces the topology pass to relocate the foot, which is what put a kink
+        in it (see ``docs/bug_log.md``).
+
+        The step is ``skin_thickness / 2`` divided by the cosine between the web
+        axis and the local skin normal, so it is solved rather than assumed.
+        """
+        half_gauge = 0.5 * float(self.skin_thickness)
+        if half_gauge <= 0.0:
+            return np.asarray(anchor, dtype=float)
+
+        phi_mid = offset(self._af, -half_gauge)
+        step = np.asarray(direction, dtype=float)
+        norm = float(np.linalg.norm(step))
+        if norm <= 1e-15:
+            return np.asarray(anchor, dtype=float)
+        step = step / norm
+        origin = np.asarray(anchor, dtype=float)
+
+        def phi_at(t):
+            p = origin + float(t) * step
+            return float(phi_mid(np.array([p[0]]), np.array([p[1]]))[0])
+
+        # phi < 0 at the anchor (inside the mid-surface) and must cross zero
+        # within a couple of gauges even for a steeply raked web.
+        lo, hi = 0.0, 4.0 * half_gauge
+        phi_lo, phi_hi = phi_at(lo), phi_at(hi)
+        if not (phi_lo <= 0.0 <= phi_hi):
+            # Degenerate local geometry: fall back to the normal-distance step
+            # rather than emitting something wilder than the anchor itself.
+            return origin + half_gauge * step
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            if phi_at(mid) <= 0.0:
+                lo = mid
+            else:
+                hi = mid
+        return origin + 0.5 * (lo + hi) * step
+
     def midline_polyline(self, n=20):
         n_use = max(2, int(n))
         top = np.array([self.x_top, self.y_top], dtype=float)
         bot = np.array([self.x_bot, self.y_bot], dtype=float)
-        return np.linspace(top, bot, n_use)
+        axis = top - bot
+        return np.linspace(
+            self._extend_to_skin_mid_surface(top, axis),
+            self._extend_to_skin_mid_surface(bot, -axis),
+            n_use,
+        )
 
     def __repr__(self):
         return (

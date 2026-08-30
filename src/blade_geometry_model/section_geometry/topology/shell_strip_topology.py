@@ -14,8 +14,11 @@ from blade_structure_utilities.geometry_utilities.section_contract.shell_midline
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.profiling import timed_stage
 
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.cap_skin_ray_resample import (
+    # Not used here: re-exported only because section_mesh's centerline_mesh
+    # plot imports it through this module. Nothing in the topology path reads
+    # it — cap resampling selects skin vertices by declared surface side.
+    # See ``docs/bug_log.md`` SG-001 / SG-006.
     _SKIN_RAY_CAP_BBOX_MARGIN_M,
-    _resample_one_cap_interior_from_skin_rays,
     concat_skin_ring_vertices,
     pick_inward_ray_direction,
     resample_cap_interiors_from_skin_rays,
@@ -23,7 +26,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.midlines.cap_
 )
 from .cap_web_junctions import insert_cap_web_interior_junctions
 from ..midlines.ring_geometry import normal_2d_ccw, point_to_open_polyline_nearest
-from ..midlines.skin_split import _MERGE_S_TOL_M, split_skin_at_junctions
+from ..midlines.skin_split import split_skin_at_junctions
 
 # Compatibility aliases (historic private names used by tests / callers).
 _split_skin_at_junctions = split_skin_at_junctions
@@ -39,8 +42,9 @@ _point_to_open_polyline_nearest = point_to_open_polyline_nearest
 @dataclass(frozen=True)
 class ShellStripTopologySpec:
     cap_resample_from_skin_rays: bool = True
-    skin_ray_cap_bbox_margin_m: float = _SKIN_RAY_CAP_BBOX_MARGIN_M
-    merge_s_tol_m: float = _MERGE_S_TOL_M
+    #: ``None`` derives the tolerance from the arc being split, which scales
+    #: with the section; a number pins it absolutely.
+    merge_s_tol_m: float | None = None
 
 
 def build_shell_strip_topology(
@@ -59,9 +63,7 @@ def build_shell_strip_topology(
         out = split_skin_at_junctions(strips, merge_s_tol_m=cfg.merge_s_tol_m)
     if cfg.cap_resample_from_skin_rays:
         with timed_stage("topology_cap_ray", stage_sink):
-            out = resample_cap_interiors_from_skin_rays(
-                out, bbox_margin_m=cfg.skin_ray_cap_bbox_margin_m
-            )
+            out = resample_cap_interiors_from_skin_rays(out)
     with timed_stage("topology_cap_web", stage_sink):
         out = insert_cap_web_interior_junctions(out)
     return out

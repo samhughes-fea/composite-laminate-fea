@@ -14,9 +14,7 @@ from ..midlines.ring_geometry import (
     intersect_open_polylines_2d,
     open_polyline_min_segment_length,
     open_polyline_prefix_lengths,
-    point_to_open_polyline_nearest,
 )
-from ..midlines.skin_split import _CAP_ENDPOINT_ON_WEB_TOL_M
 
 _CAP_WEB_JUNCTION_MERGE_ARC_M: float = 1e-6
 
@@ -32,9 +30,6 @@ def insert_cap_web_interior_junctions(
     """Insert cap midline vertices for web-related T-junctions.
 
     (1) Strict interior **segment intersections** of the cap with each web polyline.
-    (1b) Cap endpoint-on-web cases: if a cap endpoint is within
-    ``_CAP_ENDPOINT_ON_WEB_TOL_M`` of a web polyline, insert the nearest
-    web-midline point so cap/web share one web-centric node.
     (2) Optional **proximity** to each shear-web **foot** (endpoint on skin): when
     enabled (``foot_proximity_tol_m > 0``) and the foot is within tolerance of the
     cap polyline, insert the foot ``yz`` as a new vertex.
@@ -132,40 +127,15 @@ def insert_cap_web_interior_junctions(
                         continue
                     hits.append((s_hit, q.copy()))
 
-        # Endpoint-on-web handling (Class-B):
-        # inject a web-midline point for cap endpoints that sit on/near a web,
-        # unless already represented by an existing cap vertex.
-        for row in (0, -1):
-            p_end = np.asarray(pts[row], dtype=float).reshape(2)
-            best_d = float("inf")
-            best_q: NDArray[np.float64] | None = None
-            best_s_hit: float | None = None
-            for w in web_pts:
-                d_web, q_web = point_to_open_polyline_nearest(p_end, w)
-                if d_web >= best_d:
-                    continue
-                # Place slightly interior on first/last segment so insertion
-                # can happen inside open-polyline merge logic.
-                seg_idx = 0 if row == 0 else n - 2
-                seg_idx = int(np.clip(seg_idx, 0, n - 2))
-                seg_len = float(seg_lens[seg_idx])
-                if seg_len < min_seg:
-                    continue
-                eps_line = max(1e-12, min(1e-7, 1e-6 * seg_len / max(seg_len, 1e-15)))
-                t_ins = eps_line if row == 0 else 1.0 - eps_line
-                s_hit = float(prefix[seg_idx] + t_ins * seg_len)
-                best_d = d_web
-                best_q = np.asarray(q_web, dtype=float).reshape(2)
-                best_s_hit = s_hit
-            if best_q is None or best_s_hit is None:
-                continue
-            if best_d > _CAP_ENDPOINT_ON_WEB_TOL_M:
-                continue
-            if best_s_hit <= merge_arc or best_s_hit >= arc_total - merge_arc:
-                continue
-            if float(np.linalg.norm(pts - best_q, axis=1).min()) <= vertex_coincide_tol_m:
-                continue
-            hits.append((best_s_hit, best_q.copy()))
+        # A cap-endpoint-on-web branch used to live here, inserting the nearest
+        # web-midline point for any cap end within ``_CAP_ENDPOINT_ON_WEB_TOL_M``
+        # of a web. It became unreachable once ``shell_midline_export`` started
+        # emitting the web vertex at each cap-end junction: a family-D cap end is
+        # then already coincident with a web node, so the ``vertex_coincide_tol_m``
+        # guard skipped it, and a family-B/C free end is 38.6-148.6 mm from the
+        # nearest web, so the tolerance guard skipped it. Removed after
+        # confirming byte-identical output across 108 layout x twist x chord
+        # configurations with the branch disabled. See ``docs/bug_log.md`` SG-004.
 
         if not hits:
             out.append(st)

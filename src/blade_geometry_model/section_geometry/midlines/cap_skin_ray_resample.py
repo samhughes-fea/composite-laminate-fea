@@ -15,14 +15,38 @@ from .ring_geometry import (
     open_polyline_prefix_lengths,
 )
 
+#: No longer used by this module — cap resampling selects skin vertices by
+#: declared surface side. Retained because section_mesh imports it for its
+#: own plotting and handoff defaults.
 _SKIN_RAY_CAP_BBOX_MARGIN_M: float = 5e-3
 _SKIN_RAY_T_MIN_M: float = 1e-9
 
 
-def concat_skin_ring_vertices(strips: tuple[ShellMidlineStrip, ...]) -> NDArray[np.float64]:
+def _surface_side(value: object) -> str | None:
+    """Normalise a cap ``surface`` or skin ``skin_side`` to suction/pressure."""
+    text = str(getattr(value, "value", value) or "").lower()
+    if "suction" in text or text in ("ss", "upper"):
+        return "suction_surface"
+    if "pressure" in text or text in ("ps", "lower"):
+        return "pressure_surface"
+    return None
+
+
+def concat_skin_ring_vertices(
+    strips: tuple[ShellMidlineStrip, ...],
+    *,
+    with_sides: bool = False,
+):
     """Concatenate all skin ``midline_twisted_pitch_axis_blade_frame`` strips
-    in list order; dedupe shared joints."""
+    in list order; dedupe shared joints.
+
+    With ``with_sides`` the return is ``(ring, sides)`` where ``sides`` labels
+    each ring vertex suction/pressure, so a cap can be resampled from the skin
+    it actually lies under rather than from whichever vertices happen to fall
+    inside a bounding box.
+    """
     chunks: list[NDArray[np.float64]] = []
+    side_chunks: list[NDArray[np.object_]] = []
     for st in strips:
         if st.kind != "skin":
             continue
@@ -34,9 +58,16 @@ def concat_skin_ring_vertices(strips: tuple[ShellMidlineStrip, ...]) -> NDArray[
         if arr.shape[0] == 0:
             continue
         chunks.append(arr)
+        side_chunks.append(
+            np.full(arr.shape[0], _surface_side(st.skin_side), dtype=object)
+        )
     if not chunks:
-        return np.empty((0, 2), dtype=float)
-    return np.vstack(chunks)
+        empty = np.empty((0, 2), dtype=float)
+        return (empty, np.empty(0, dtype=object)) if with_sides else empty
+    ring = np.vstack(chunks)
+    if not with_sides:
+        return ring
+    return ring, np.concatenate(side_chunks)
 
 
 def skin_ring_vertex_tangents(ring: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -144,7 +175,8 @@ def _resample_one_cap_interior_from_skin_rays(
     skin_ring: NDArray[np.float64],
     skin_tangents: NDArray[np.float64],
     *,
-    bbox_margin_m: float = _SKIN_RAY_CAP_BBOX_MARGIN_M,
+    skin_sides: NDArray[np.object_] | None = None,
+    cap_side: str | None = None,
 ) -> ShellMidlineStrip | None:
     """Return replaced cap strip, or ``None`` to keep original."""
     pts = np.asarray(cap_strip.midline_twisted_pitch_axis_blade_frame, dtype=float)
@@ -154,10 +186,6 @@ def _resample_one_cap_interior_from_skin_rays(
     p0 = pts[0].copy()
     p1 = pts[-1].copy()
     c_mid = np.asarray(np.mean(pts, axis=0), dtype=float).reshape(2)
-
-    xmin, xmax = float(pts[:, 0].min()), float(pts[:, 0].max())
-    ymin, ymax = float(pts[:, 1].min()), float(pts[:, 1].max())
-    mrg = float(bbox_margin_m)
 
     prefix_full = open_polyline_prefix_lengths(pts)
     arc_total = float(prefix_full[-1])
@@ -172,14 +200,14 @@ def _resample_one_cap_interior_from_skin_rays(
 
     m = int(skin_ring.shape[0])
     for i in range(m):
-        q = skin_ring[i]
-        if (
-            q[0] < xmin - mrg
-            or q[0] > xmax + mrg
-            or q[1] < ymin - mrg
-            or q[1] > ymax + mrg
-        ):
+        # Which skin a cap belongs under is declared on the strip, so there is
+        # nothing to infer geometrically. Vertices from the other surface are
+        # excluded because a ray aimed at the cap centroid from the far side can
+        # still strike it; every remaining hit is filtered by arc position below,
+        # which is what actually bounds the resample.
+        if skin_sides is not None and skin_sides[i] != cap_side:
             continue
+        q = skin_ring[i]
         ti = skin_tangents[i]
         n_ccw = normal_2d_ccw(ti)
         v = pick_inward_ray_direction(q, n_ccw, c_mid)
@@ -223,16 +251,20 @@ def _resample_one_cap_interior_from_skin_rays(
 
 def resample_cap_interiors_from_skin_rays(
     strips: tuple[ShellMidlineStrip, ...],
-    *,
-    bbox_margin_m: float = _SKIN_RAY_CAP_BBOX_MARGIN_M,
 ) -> tuple[ShellMidlineStrip, ...]:
     """Replace interior vertices of each cap using inward rays from skin master ring.
 
-    Cap **endpoints** are left unchanged (skin–web junction snap is applied earlier
-    in :func:`split_skin_at_junctions`). If resampling yields too few hits for a
-    cap, that strip is left unchanged.
+    Cap **endpoints** are left unchanged — they are already at their true extent
+    on emit, and nothing downstream relocates them. If resampling yields too few
+    hits for a cap, that strip is left unchanged.
+
+    Which skin a cap sits under is taken from the strips' declared
+    ``surface`` / ``skin_side``, not from a bounding box. The bounding-box
+    pre-filter this replaced carried a fixed margin that could be narrower than
+    the skin-to-cap separation ``(skin_t + cap_t)/2``, in which case it discarded
+    nearly every skin vertex above the cap and collapsed its interior to a chord.
     """
-    skin_ring = concat_skin_ring_vertices(strips)
+    skin_ring, skin_sides = concat_skin_ring_vertices(strips, with_sides=True)
     if skin_ring.shape[0] < 3:
         return strips
 
@@ -249,7 +281,8 @@ def resample_cap_interiors_from_skin_rays(
             st,
             skin_ring,
             skin_tangents,
-            bbox_margin_m=bbox_margin_m,
+            skin_sides=skin_sides,
+            cap_side=_surface_side(st.surface),
         )
         out.append(new_st if new_st is not None else st)
     return tuple(out)
