@@ -31,7 +31,7 @@ Deviations are stated per entry.
 | [SG-003](#sg-003) | Band-cap (**B**) and discrete-cap (**C**) ends are relocated onto the skin | **Fixed** (no relocation at all) |
 | [SG-004](#sg-004) | Cap–web junction has no shared node at a cap **end** | **Fixed** at emit |
 | [SG-005](#sg-005) | Interior cap–web T-junctions have a node on the **cap** side only | **Open** — latent, conforms on mesher tolerance |
-| [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Open** — figure only, no effect on geometry or mesh |
+| [SG-006](#sg-006) | `centerline_mesh` still draws the bounding-box filter SG-001 deleted | **Fixed** — plot mirrors the resampler; the constant is gone |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -50,7 +50,7 @@ class of bug. Status after applying the invariant to both paths:
 | cap end ← `point_to_open_polyline_nearest` + `_CAP_ENDPOINT_ON_WEB_TOL_M` | relocated free ends onto the skin | **gone** — caps pass through `skin_split` untouched, and the constant and its last consumer have since been deleted (SG-004) |
 | cap **end** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` (6 mm at 1 m chord) | junction conformed on ~4 mm of margin | **gone** — web emits a vertex at each cap-end junction, coincident to 0.000 µm |
 | cap **interior** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` | junction conformed on ~4 mm of margin | **still there** — SG-005 |
-| cap resample ← `_SKIN_RAY_CAP_BBOX_MARGIN_M` | proximity box with a fixed margin | **gone from the geometry path** — skin vertices selected by declared suction/pressure side; the constant survives for one plot (SG-006) |
+| cap resample ← `_SKIN_RAY_CAP_BBOX_MARGIN_M` | proximity box with a fixed margin | **gone** — skin vertices selected by declared suction/pressure side, in the resampler and in the plot that draws it; the constant is deleted (SG-001, SG-006) |
 
 The merge tolerance that decides when two skin cuts are one cut is *indexing*,
 not relocation, so it stays — but it is now derived from the arc being split
@@ -68,7 +68,7 @@ This section covers the **whole package plus its downstream callers**, including
 them. Nothing in this list is a defect except where noted, so do not "clean
 them up" without reading the linked entry first.
 
-`point_to_open_polyline_nearest` — 5 live sites:
+`point_to_open_polyline_nearest` — 4 live sites:
 
 | Site | Still there because |
 |---|---|
@@ -76,24 +76,40 @@ them up" without reading the linked entry first.
 | `midlines/skin_split.py`, in `split_skin_at_junctions` | **indexing only.** The web foot is already the junction; this reads the arc length at which to split the skin. It no longer writes to `arr[row]`. See SG-002. |
 | `topology/shell_strip_topology.py` | re-export plus a `_point_to_open_polyline_nearest` compatibility alias. No call. |
 | `visualisation/demos/shell_junction_topology_demo.py`, `visualisation/demos/topology_twist_stability_demo.py` | **measurement.** Both demos use it to *report* junction gaps, which is what produced the numbers in SG-002 and SG-005. |
-| `mesh_utilities/section_mesh/visualisation/centerline_mesh.py` | plotting — and part of SG-006. |
 
-It is **gone** from `topology/cap_web_junctions.py`, which no longer imports it.
+It is **gone** from `topology/cap_web_junctions.py` and from `section_mesh`'s
+`centerline_mesh.py`, neither of which imports it any more.
 
-`_SKIN_RAY_CAP_BBOX_MARGIN_M` — 3 live sites, all outside the geometry path:
-
-| Site | Still there because |
-|---|---|
-| `midlines/cap_skin_ray_resample.py` | definition, documented as unused by the resampler. |
-| `topology/shell_strip_topology.py` | re-export in `__all__` **only** so `centerline_mesh` can import it through this module. The inert `ShellStripTopologySpec.skin_ray_cap_bbox_margin_m` field that used to default from it has been deleted (SG-001). |
-| `mesh_utilities/section_mesh/visualisation/centerline_mesh.py` | it still implements the deleted filter — SG-006. |
+`_SKIN_RAY_CAP_BBOX_MARGIN_M` — **no live sites.** Deleted with SG-006; the only
+surviving mention is a historical sentence in
+`tests/test_cap_skin_ray_resample_fidelity.py`.
 
 Deleted during the 2026-08-30 cleanup, 0 references each: `_CAP_ENDPOINT_ON_WEB_TOL_M`,
 `_MERGE_S_TOL_M`, `_axis_polyline_crossing_nearest`, `required_cap_bbox_margin_m`,
-`_SKIN_RAY_BBOX_MARGIN_SAFETY`, `ShellStripTopologySpec.skin_ray_cap_bbox_margin_m`,
-and the `skin_ray_cap_bbox_margin_m` parameter of `shell_mesh_inputs_from_section`.
+`_SKIN_RAY_BBOX_MARGIN_SAFETY`, `_SKIN_RAY_CAP_BBOX_MARGIN_M`,
+`ShellStripTopologySpec.skin_ray_cap_bbox_margin_m`, and the
+`skin_ray_cap_bbox_margin_m` parameter of `shell_mesh_inputs_from_section`.
 
-**Still open:** SG-005 (geometry) and SG-006 (a figure).
+**Still open:** SG-005.
+
+### One offset operator (hardened 2026-08-30)
+
+Everything above rests on loci at different depths being **parallel by
+construction**: the skin mid-surface at `t/2`, the inner cavity at `t`, the cap
+slab at `t + h`, the cap mid-surface at `t + h/2`. That holds only while every
+one of them comes from the same offset settings — a mitre join is the exact
+equidistant point for a locally-convex ring, so interpolation along an offset
+polyline stays on the locus, which a different join style would not give.
+
+`buffer(-d, quad_segs=16, join_style=2, mitre_limit=5.0)` used to be hand-written
+at **10 sites across 5 files**, so that contract was enforced by copy-paste: one
+literal drifting would silently un-parallel two loci and reproduce the SG-001 /
+SG-003 class with nothing to catch it. All ten now go through
+`constructive/helpers.py::offset_polygon_inward`, which owns the three settings
+as private constants. Verified separately that `mitre_limit = 5.0` never falls
+back to a bevel (identical geometry against `mitre_limit = 1e6`) across
+`n_points` 200/400, chords 1.0 / 0.241 m and depths 0.72–40 mm, so the limit is
+not a hidden exactness cliff.
 
 SG-001 through SG-004 were all found while building
 [`visualisation/demos/geometry_to_mesh_flythrough.py`](../visualisation/demos/geometry_to_mesh_flythrough.py),
@@ -207,8 +223,8 @@ survived the rework unaltered.
 outlived the mechanism they configured. `build_shell_strip_topology` never read
 the field, so a caller could set the margin and get silence — the field's own
 docstring admitted this, but the handoff signature did not. Both deleted; no
-caller passed either. `_SKIN_RAY_CAP_BBOX_MARGIN_M` itself is retained and
-re-exported for the reason in SG-006.
+caller passed either. `_SKIN_RAY_CAP_BBOX_MARGIN_M` itself outlived them by one
+consumer, a plot, and went with SG-006.
 
 ---
 
@@ -478,7 +494,7 @@ it would compute against is not the cap that survives resampling.
 
 **`centerline_mesh` still draws the bounding-box filter SG-001 deleted**
 
-**Status:** Open — figure only; no effect on geometry, strips or mesh
+**Status:** Fixed
 **Found:** 2026-08-30
 **Area:** `mesh_utilities/section_mesh/visualisation/centerline_mesh.py`
 
@@ -490,26 +506,35 @@ get an arrow by reimplementing the cap bounding box plus
 `_SKIN_RAY_CAP_BBOX_MARGIN_M` — the exact 5 mm proximity box that SG-001 proved
 was the defect and removed from the resampler.
 
-### Consequence
+### Evidence
 
-The figure shows the *old* algorithm. On the SG-001 reference case it would draw
-arrows from roughly 6 of 24 skin vertices, clustered at the cap ends, where the
-real resampler now uses every vertex on the declared side. Anyone reading the
-plot to understand cap resampling is being shown the bug, not the fix.
+Skin vertices that would be drawn with an inward ray, old filter vs what the
+resampler actually considers (NACA 2412, 1 m chord, zero twist):
 
-Geometry, strips and mesh are unaffected — this code path only emits arrows.
+| Layout | Skin vertices | Old bbox arrows | Declared-side arrows |
+|---|---|---|---|
+| `2D-F` | 187 | 16 | 187 |
+| `3D-F` | 189 | 45 | 189 |
+| `2C-F` | 187 | **6** | 187 |
+| `5D-CN` | 193 | 65 | 193 |
 
-### Why it is still here
+`2C-F` drew **6 of 187** — 3 % of the ray origins the resampler uses. That is the
+SG-001 failure mode itself, rendered as though it were the algorithm.
 
-It is the sole remaining consumer of `_SKIN_RAY_CAP_BBOX_MARGIN_M` and the reason
-that constant, and its re-export from `topology/shell_strip_topology.py`, are
-retained. Closing this entry makes both deletable.
+Geometry, strips and mesh were unaffected throughout — this code path only emits
+arrows.
 
 ### Fix
 
-Replace the bbox test with the same declared-side selection the resampler uses
-(`skin_side` / `surface` on the strip, as in
-`concat_skin_ring_vertices(..., with_sides=True)`), then delete the constant and
-its re-export. Left open rather than done blind: the demo is covered by
-`section_mesh/tests/test_centerline_mesh_plots.py`, and what the figure is
-*meant* to teach should be settled before its content changes.
+`_add_skin_inward_rays_class_c_near_caps` now mirrors
+`_resample_one_cap_interior_from_skin_rays`: a skin vertex contributes a ray when
+its declared surface side matches a cap's, aimed inward at that cap's centroid,
+with no proximity re-filter. It imports from `cap_skin_ray_resample` directly
+rather than through `shell_strip_topology`, so the plot and the algorithm now
+share a module as well as a rule. The quiver label changed from "Class C ray dir
+(perp tangent, in cap bbox)" to "(perp tangent, declared side)".
+
+With the last consumer gone, `_SKIN_RAY_CAP_BBOX_MARGIN_M` and its re-export from
+`topology/shell_strip_topology.py` are deleted — 0 references in code.
+Covered by `section_mesh/tests/test_centerline_mesh_plots.py`, which passes
+unaltered: it asserts the figure renders, not what it filters.

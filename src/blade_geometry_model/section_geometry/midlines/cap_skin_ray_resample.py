@@ -15,10 +15,6 @@ from .ring_geometry import (
     open_polyline_prefix_lengths,
 )
 
-#: No longer used by this module — cap resampling selects skin vertices by
-#: declared surface side. Retained because section_mesh imports it for its
-#: own plotting and handoff defaults.
-_SKIN_RAY_CAP_BBOX_MARGIN_M: float = 5e-3
 _SKIN_RAY_T_MIN_M: float = 1e-9
 
 
@@ -289,7 +285,6 @@ def resample_cap_interiors_from_skin_rays(
 
 
 __all__ = [
-    "_SKIN_RAY_CAP_BBOX_MARGIN_M",
     "concat_skin_ring_vertices",
     "skin_ring_vertex_tangents",
     "pick_inward_ray_direction",

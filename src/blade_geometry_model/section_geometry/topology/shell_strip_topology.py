@@ -14,11 +14,6 @@ from blade_structure_utilities.geometry_utilities.section_contract.shell_midline
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.profiling import timed_stage
 
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.cap_skin_ray_resample import (
-    # Not used here: re-exported only because section_mesh's centerline_mesh
-    # plot imports it through this module. Nothing in the topology path reads
-    # it — cap resampling selects skin vertices by declared surface side.
-    # See ``docs/bug_log.md`` SG-001 / SG-006.
-    _SKIN_RAY_CAP_BBOX_MARGIN_M,
     concat_skin_ring_vertices,
     pick_inward_ray_direction,
     resample_cap_interiors_from_skin_rays,
@@ -80,5 +75,4 @@ __all__ = [
     "normal_2d_ccw",
     "pick_inward_ray_direction",
     "point_to_open_polyline_nearest",
-    "_SKIN_RAY_CAP_BBOX_MARGIN_M",
 ]
