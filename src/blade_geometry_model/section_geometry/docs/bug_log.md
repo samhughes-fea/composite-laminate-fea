@@ -53,7 +53,7 @@ class of bug. Status after applying the invariant to both paths:
 | web foot ← `point_to_open_polyline_nearest` | relocated the foot | **relocation gone** — web emits to the skin mid-surface; the call survives in `split_skin_at_junctions` but only to read an arc length |
 | cap end ← `point_to_open_polyline_nearest` + `_CAP_ENDPOINT_ON_WEB_TOL_M` | relocated free ends onto the skin | **gone** — caps pass through `skin_split` untouched, and the constant and its last consumer have since been deleted (SG-004) |
 | cap **end** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` (6 mm at 1 m chord) | junction conformed on ~4 mm of margin | **gone** — web emits a vertex at each cap-end junction, coincident to 0.000 µm |
-| cap **interior** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` | junction conformed on ~4 mm of margin | **gone** — one solved crossing is inserted into both strips (SG-005) |
+| cap **interior** ↔ web node ← mesher `ENDPOINT_TOL_FRAC` | junction conformed on ~4 mm of margin | **gone** — one solved axis×cap crossing inserted into both strips (SG-005, detection primitive SG-009) |
 | cap resample ← `_SKIN_RAY_CAP_BBOX_MARGIN_M` | proximity box with a fixed margin | **gone** — skin vertices selected by declared suction/pressure side, in the resampler and in the plot that draws it; the constant is deleted (SG-001, SG-006) |
 
 The merge tolerance that decides when two skin cuts are one cut is *indexing*,
@@ -98,9 +98,9 @@ Deleted during the 2026-08-30 cleanup, 0 references each: `_CAP_ENDPOINT_ON_WEB_
 documentation — the discrete airfoil polygon *is* the section. SG-010 budgets
 the solids camber clip under that contract. SG-007 drops the absolute merge
 floor and tightens `vertex_coincide_tol_m` to 1 nm (the 0.89 µm residual was the
-coincide guard skipping a true crossing next to a resampled vertex). SG-009
-remains deferred: primitive junction solve on the emit path, no live numeric
-defect.
+coincide guard skipping a true crossing next to a resampled vertex). SG-009 is
+**Fixed**: interiors are solved post-resample as web axis × final cap
+(`intersect_web_axis_open_polyline_2d`); cap ends stay at emit.
 
 ### One offset operator (hardened 2026-08-30)
 
@@ -192,11 +192,13 @@ re-investigated: refining any of these buys nothing.
 ### The trap this class hides
 
 Making one side of a junction exact can break the *other* side's detection.
-Placing a web vertex precisely on a cap turns a polyline crossing into a
-tangency, and `intersect_open_polylines_2d` then finds nothing. SG-005 records
+Placing a web vertex precisely on a cap turns a polyline×polyline crossing into
+a tangency, and `intersect_open_polylines_2d` then finds nothing. SG-005 records
 the measured swap on `4D-F`: web gap 1570 µm → 0, cap gap 0 → 1056 µm. Junction
 exactness has to be established for both participants in the same pass, from one
-solved crossing, after both polylines are final.
+solved crossing, after both polylines are final. SG-009 removes the class of
+trap for *detection* by solving interiors from the web axis rather than from
+polyline×polyline crossings; the shared-node insert rule from SG-005 remains.
 
 ---
 
@@ -545,11 +547,16 @@ at 0.8924 µm (SG-007 — absolute coincide / merge floors; fixed separately).
 
 Pinned by `tests/test_cap_web_interior_junction_shared_node.py`, 40 cases. It
 locates crossings from the **web axis**, deliberately not with
-`intersect_open_polylines_2d`: a test built on the production detector would pass
-vacuously on a correct fix *and* on one that deleted every junction. Verified to
+`intersect_open_polylines_2d`: a test built on that detector would pass vacuously
+on a correct fix *and* on one that deleted every junction. Verified to
 discriminate — against the pre-fix code all 20 web-side cases fail and all 20
 cap-side cases pass, which is also independent confirmation that the cap side was
 never the broken one.
+
+**Later (SG-009):** production detection switched from
+`intersect_open_polylines_2d` to `intersect_web_axis_open_polyline_2d`. The
+detect-then-insert / pending-web half-junction rules above still apply; only the
+crossing primitive changed. See [SG-009](#sg-009).
 
 ---
 
