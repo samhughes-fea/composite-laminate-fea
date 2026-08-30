@@ -1,6 +1,8 @@
-﻿"""SG-009 offline spike: compare production shared nodes to axis x cap oracle.
+﻿"""SG-009 offline check: production shared nodes vs axis x cap oracle.
 
-Non-production. Does not change build_shell_strip_topology.
+Production already uses ``intersect_web_axis_open_polyline_2d`` inside
+``insert_cap_web_interior_junctions``. This script re-solves the same oracle
+against prepared strips and reports residual gaps.
 
 For layouts 4D-F (tangency stress) and 5C-CN (short-cap / SG-007 stress):
 
@@ -8,7 +10,7 @@ For layouts 4D-F (tangency stress) and 5C-CN (short-cap / SG-007 stress):
 2. Re-solve interior crossings via web axis x final cap polyline.
 3. Report max gap from each oracle hit to the nearest production web/cap vertex.
 
-Expect ~0 nm after SG-005 / SG-007. See docs/reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md.
+Expect ~0 nm after SG-005 / SG-007 / SG-009. See docs/reports/SG009_JUNCTION_PRIMITIVES_SPIKE.md.
 
 Run from the repository root::
 
@@ -117,7 +119,7 @@ def main() -> None:
             f"{row['layout']:8s}  {row['n_oracle_hits']:5d}  "
             f"{row['max_web_gap_nm']:12.3f}  {row['max_cap_gap_nm']:12.3f}"
         )
-    print("Expect max_*_nm ~ 0 after SG-005 / SG-007. Not wired into production.")
+    print("Expect max_*_nm ~ 0 after SG-005 / SG-007 / SG-009.")
 
 
 if __name__ == "__main__":
