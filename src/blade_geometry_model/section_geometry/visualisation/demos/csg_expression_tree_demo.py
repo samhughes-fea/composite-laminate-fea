@@ -50,6 +50,13 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     demo_output_dir,
     save_figure,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.palette import (
+    INK,
+    NAVY,
+    RED,
+    distance_field_norm,
+    draw_distance_field,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
@@ -214,7 +221,10 @@ def draw_tree(axis, root: Expr, shared_nodes: set[Expr]) -> None:
         box_font, show_parameters, show_formula = 4.8, False, False
 
     box_half_width = 0.42 if leaf_count <= 6 else 0.46
-    box_half_height = 0.22 if show_parameters else 0.15
+    # The numpy line rides inside the node, so the box has to be tall enough to
+    # carry it. Floated outside to the right it read as stray text with nothing
+    # tying it to the operator it implements.
+    box_half_height = (0.27 if show_formula else 0.22) if show_parameters else 0.15
     row_pitch = 1.0 if show_parameters else 0.72
 
     for parent_id, child_id in edges:
@@ -245,10 +255,12 @@ def draw_tree(axis, root: Expr, shared_nodes: set[Expr]) -> None:
             zorder=2,
         )
         axis.add_patch(box)
+        formula = _OPERATOR_FORMULA.get(type(node).__name__)
+        carries_formula = show_formula and formula is not None
         caption = node_caption(node) if show_parameters else type(node).__name__
         axis.text(
             node_x,
-            node_y,
+            node_y + (0.05 if carries_formula else 0.0),
             caption,
             ha="center",
             va="center",
@@ -257,23 +269,24 @@ def draw_tree(axis, root: Expr, shared_nodes: set[Expr]) -> None:
             zorder=3,
             linespacing=1.2,
         )
-        formula = _OPERATOR_FORMULA.get(type(node).__name__)
-        if show_formula and formula is not None:
+        if carries_formula:
             axis.text(
-                node_x + box_half_width + 0.06,
-                node_y,
+                node_x,
+                node_y - box_half_height + 0.06,
                 formula,
-                ha="left",
+                ha="center",
                 va="center",
-                fontsize=6.6,
+                fontsize=6.4,
                 family="monospace",
-                color="#41505c",
+                color="white",
+                alpha=0.82,
                 zorder=3,
             )
 
     all_x = [p[0] for p in positions.values()]
     all_y = [p[1] * row_pitch for p in positions.values()]
-    right_margin = 1.9 if show_formula else box_half_width + 0.4
+    # The formula now sits inside the node, so no right gutter is reserved for it.
+    right_margin = box_half_width + 0.4
     axis.set_xlim(min(all_x) - box_half_width - 0.4, max(all_x) + right_margin)
     axis.set_ylim(
         min(all_y) - box_half_height - 0.35, max(all_y) + box_half_height + 0.35
@@ -355,16 +368,17 @@ def draw_field(
     *,
     area_m2: float | None = None,
     previous_phi: np.ndarray | None = None,
-) -> None:
+    norm=None,
+):
     """Signed field with the phi=0 interface picked out.
 
     ``previous_phi`` draws the preceding stage's interface as a dashed ghost, so
     a small ``Offset`` reads as a visible gap rather than an identical picture.
+
+    Returns the mesh so the caller can hang one shared colourbar off the row:
+    without it the three panels show magnitude with no scale to read it against.
     """
-    limit = float(np.percentile(np.abs(phi), 96)) or 1.0
-    axis.pcolormesh(
-        grid.X, grid.Y, phi, cmap="RdBu_r", vmin=-limit, vmax=limit, shading="auto"
-    )
+    mesh = draw_distance_field(axis, grid.X, grid.Y, phi, norm=norm, zero_line_width=1.5)
     if previous_phi is not None:
         axis.contour(
             grid.X,
@@ -375,7 +389,6 @@ def draw_field(
             linewidths=1.1,
             linestyles="dashed",
         )
-    axis.contour(grid.X, grid.Y, phi, levels=[0.0], colors="k", linewidths=1.5)
     axis.set_title(title, fontsize=9.0)
     axis.set_xticks([])
     axis.set_yticks([])
@@ -390,6 +403,34 @@ def draw_field(
             color="#2b3238",
             bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "none", "pad": 1.8},
         )
+    return mesh
+
+
+def _annotate_target(axis, x_plot, y_plot, target_phi, label: str) -> None:
+    """Leader-line the highlighted region so it is named where it is drawn.
+
+    The colour alone identifies it only for someone who already knows which
+    region is which; from the back of a room the label has to be on the figure.
+    """
+    inside = np.asarray(target_phi) < 0.0
+    if not inside.any():
+        return
+    x_center = float(np.asarray(x_plot)[inside].mean())
+    y_center = float(np.asarray(y_plot)[inside].mean())
+
+    _, y_top = axis.get_ylim()
+    axis.annotate(
+        label,
+        xy=(x_center, y_center),
+        xytext=(x_center, y_top * 0.72),
+        ha="center",
+        va="bottom",
+        fontsize=9.5,
+        fontweight="bold",
+        color=INK,
+        zorder=6,
+        arrowprops={"arrowstyle": "-", "color": INK, "linewidth": 0.9},
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -490,18 +531,27 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     figure = plt.figure(figsize=(17.0, 10.6))
-    outer = figure.add_gridspec(2, 1, height_ratios=[1.20, 1.0], hspace=0.20)
-    top = outer[0].subgridspec(1, 2, width_ratios=[1.0, 1.5], wspace=0.10)
+    # A station is a thin lens. Given a tall top row, equal aspect fills the
+    # difference with dead space above and below the aerofoil rather than with
+    # geometry, so the row is deliberately short.
+    outer = figure.add_gridspec(2, 1, height_ratios=[0.82, 1.0], hspace=0.22)
+    # The tree is three or four nodes and does not need the larger half; the
+    # section is a thin lens and every millimetre of width becomes drawn chord.
+    top = outer[0].subgridspec(1, 2, width_ratios=[1.35, 1.0], wspace=0.10)
     axis_section = figure.add_subplot(top[0, 0])
     axis_tree = figure.add_subplot(top[0, 1])
 
+    # The assembly is context, not subject: hold it at low alpha so the one
+    # region this figure is about can be filled solid over the top. The legend
+    # goes with it — the anatomy figure names all nine regions one slide
+    # earlier, and repeating them here costs the section its best real estate.
     plot_section(
         section,
         section_grid,
         ax=axis_section,
-        alpha=0.40,
+        alpha=0.16,
         show_airfoil=False,
-        show_legend=True,
+        show_legend=False,
         auto_limits=True,
         title=f"{args.key} section - the region built below is {args.label}",
     )
@@ -515,9 +565,28 @@ def main(argv: list[str] | None = None) -> int:
     x_plot, y_plot = rotated_naca_grid_to_section_plot_axes(
         section_grid.X, section_grid.Y, twist_rad=twist_rad, chord_m=float(args.chord)
     )
-    axis_section.contour(
-        x_plot, y_plot, target_phi_section, levels=[0.0], colors="#111418", linewidths=2.4
+    # Filled, not merely outlined. A 3.5 mm web drawn as a 2.4 pt contour at
+    # section scale is indistinguishable from a plotting artefact — the earlier
+    # version promised a highlight and delivered a thin black rectangle.
+    axis_section.contourf(
+        x_plot,
+        y_plot,
+        target_phi_section,
+        levels=[float(np.nanmin(target_phi_section)) - 1.0, 0.0],
+        colors=[RED],
+        alpha=0.95,
+        zorder=4,
     )
+    axis_section.contour(
+        x_plot,
+        y_plot,
+        target_phi_section,
+        levels=[0.0],
+        colors=[NAVY],
+        linewidths=2.0,
+        zorder=5,
+    )
+    _annotate_target(axis_section, x_plot, y_plot, target_phi_section, args.label)
 
     axis_tree.set_title(
         f"Expression tree for {args.label}\n"
@@ -530,17 +599,32 @@ def main(argv: list[str] | None = None) -> int:
     bottom = outer[1].subgridspec(1, len(stages), wspace=0.07)
     stage_records: list[dict] = []
     previous_phi: np.ndarray | None = None
-    for stage_index, stage_expression in enumerate(stages):
-        axis_stage = figure.add_subplot(bottom[0, stage_index])
-        # A fresh memo per stage, deliberately. The memo is keyed by Expr alone,
-        # but a Rotate node evaluates its base at pulled-back coordinates - so a
-        # memo carried across a Rotate boundary would hand back values sampled
-        # at the wrong points. Sharing is safe within one root (as the package
-        # does); it is not safe across these independently rooted stages.
-        phi = np.asarray(
+    stage_axes: list = []
+    stage_mesh = None
+
+    # A fresh memo per stage, deliberately. The memo is keyed by Expr alone, but
+    # a Rotate node evaluates its base at pulled-back coordinates - so a memo
+    # carried across a Rotate boundary would hand back values sampled at the
+    # wrong points. Sharing is safe within one root (as the package does); it is
+    # not safe across these independently rooted stages.
+    stage_fields = [
+        np.asarray(
             eval_expr_batch(stage_expression, stage_grid.X, stage_grid.Y, {}),
             dtype=float,
         )
+        for stage_expression in stages
+    ]
+
+    # One norm for the row, taken from the first stage. Per-panel norms make the
+    # progression unreadable: the final Intersect encloses a 3.5 mm web, so a
+    # norm derived from it clips everything past 3.5 mm and floods the panel
+    # with one flat colour. The stages are the same field being cut down — they
+    # have to be measured against the same scale to show that.
+    stage_norm = distance_field_norm(stage_fields[0])
+
+    for stage_index, stage_expression in enumerate(stages):
+        axis_stage = figure.add_subplot(bottom[0, stage_index])
+        phi = stage_fields[stage_index]
         # Ghost the previous interface only where this stage transformed it
         # in place (Offset / Shell / Slab); a fresh leaf has nothing to compare.
         ghost = (
@@ -549,14 +633,16 @@ def main(argv: list[str] | None = None) -> int:
             else None
         )
         stage_area = stage_grid.area(phi)
-        draw_field(
+        stage_mesh = draw_field(
             axis_stage,
             stage_grid,
             phi,
             f"{stage_index + 1}. {type(stage_expression).__name__}",
             area_m2=stage_area,
             previous_phi=ghost,
+            norm=stage_norm,
         )
+        stage_axes.append(axis_stage)
         stage_records.append(
             {
                 "node": type(stage_expression).__name__,
@@ -564,6 +650,15 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         previous_phi = phi
+
+    # One bar for the row: the stage panels carry magnitude and had no scale to
+    # read it against. All three share ``stage_norm``, so one bar is honest.
+    if stage_mesh is not None and stage_axes:
+        colour_bar = figure.colorbar(
+            stage_mesh, ax=stage_axes, orientation="vertical", fraction=0.022, pad=0.012
+        )
+        colour_bar.set_label("φ (m)", fontsize=8.5)
+        colour_bar.ax.tick_params(labelsize=7.5)
 
     figure.suptitle(
         "Geometry is a compiled program: one region, its CSG tree, "

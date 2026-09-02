@@ -139,17 +139,33 @@ def main(argv: list[str] | None = None) -> Path:
     ]
     union_fn = union_all(laminates)
 
+    # Carry the stats key alongside each field. Deriving it from the title by
+    # substring match silently mislabelled the middle field and left its entry
+    # missing, which crashed the residual-histogram figure below.
     fields = [
-        ("airfoil SDF", af, 0.08),
-        ("skin_suction_surface (slab ∩ camber)", skin_ss, 0.04),
-        ("laminate CSG union", union_fn, 0.04),
+        ("airfoil SDF", af, 0.08, "airfoil"),
+        ("skin_suction_surface (slab ∩ camber)", skin_ss, 0.04, "skin_suction_surface"),
+        ("laminate CSG union", union_fn, 0.04, "laminate_union"),
     ]
 
     fig, axes = plt.subplots(2, 3, figsize=(15.0, 7.5))
     stats: dict[str, dict] = {}
     ridge_store: dict[str, np.ndarray] = {}
 
-    for col, (title, sdf_fn, vmax) in enumerate(fields):
+    from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.plot_section import (
+        apply_structural_section_axes,
+        rotated_naca_grid_to_section_plot_axes,
+    )
+
+    # The top row goes through plot_sdf_field, which maps the grid into the B plot
+    # frame. The bottom row draws the same grid, so it has to be mapped too —
+    # otherwise apply_structural_section_axes labels raw chord coordinates as Y_B
+    # and the two rows disagree about where the section is.
+    grid_h, grid_v = rotated_naca_grid_to_section_plot_axes(
+        grid.X, grid.Y, twist_rad=0.0, chord_m=float(af.chord)
+    )
+
+    for col, (title, sdf_fn, vmax, key) in enumerate(fields):
         phi = grid.eval(sdf_fn)
         gm = grid.grad_magnitude(phi)
         plot_sdf_field(
@@ -161,8 +177,8 @@ def main(argv: list[str] | None = None) -> Path:
             colorbar=(col == 2),
         )
         im = axes[1, col].pcolormesh(
-            grid.X,
-            grid.Y,
+            grid_h,
+            grid_v,
             gm,
             cmap="viridis",
             vmin=0.0,
@@ -170,14 +186,17 @@ def main(argv: list[str] | None = None) -> Path:
             shading="auto",
         )
         axes[1, col].contour(
-            grid.X, grid.Y, phi, levels=[0.0], colors="w", linewidths=1.0
+            grid_h, grid_v, phi, levels=[0.0], colors="w", linewidths=1.0
         )
         ridges = _ridge_xy(grid, gm, phi)
         ridge_store[title] = ridges
         if ridges.size:
+            ridge_h, ridge_v = rotated_naca_grid_to_section_plot_axes(
+                ridges[:, 0], ridges[:, 1], twist_rad=0.0, chord_m=float(af.chord)
+            )
             axes[1, col].scatter(
-                ridges[:, 0],
-                ridges[:, 1],
+                ridge_h,
+                ridge_v,
                 s=2,
                 c="#FF5252",
                 alpha=0.55,
@@ -186,20 +205,9 @@ def main(argv: list[str] | None = None) -> Path:
             )
             axes[1, col].legend(fontsize=7, loc="upper right")
         axes[1, col].set_title(f"|∇φ| — {title}")
-        from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.plot_section import (
-            apply_structural_section_axes,
-        )
-
         apply_structural_section_axes(axes[1, col])
         if col == 2:
             fig.colorbar(im, ax=axes[1, col], label="|∇φ|")
-        key = title.split()[0].lower().replace(",", "")
-        if "airfoil" in title.lower():
-            key = "airfoil"
-        elif "outer_skin" in title.lower():
-            key = "skin_suction_surface"
-        else:
-            key = "laminate_union"
         stats[key] = {
             "title": title,
             "eikonal_residual_excl_band_m": _BAND_M,
@@ -214,11 +222,7 @@ def main(argv: list[str] | None = None) -> Path:
     _save_fig(fig, out_dir / "metric_quality_fields.png")
 
     fig2, axes2 = plt.subplots(1, 3, figsize=(14.0, 4.0))
-    for ax, (title, sdf_fn, _vmax), key in zip(
-        axes2,
-        fields,
-        ("airfoil", "skin_suction_surface", "laminate_union"),
-    ):
+    for ax, (title, sdf_fn, _vmax, key) in zip(axes2, fields):
         phi = grid.eval(sdf_fn)
         gm = grid.grad_magnitude(phi)
         mask = np.abs(phi) >= _BAND_M

@@ -62,6 +62,8 @@ Section / gallery / junctions / cell walls / anatomy.
 | [`void_cell_wall_loops_demo.py`](void_cell_wall_loops_demo.py) | Closed cell loops for 0?5 webs |
 | [`section_properties_dashboard.py`](section_properties_dashboard.py) | Per-label area / inertia dashboard |
 | [`feature_flythroughs.py`](feature_flythroughs.py) | Reusable GIF fly-through pipeline |
+| [`design_vector_morph.py`](design_vector_morph.py) | One design vector -> solids, midlines and Q4 mesh, animated |
+| [`api_quickstart_demo.py`](api_quickstart_demo.py) | The README quickstart, run, plus what the result holds |
 
 ---
 
@@ -79,6 +81,7 @@ Section / gallery / junctions / cell walls / anatomy.
 | [`robustness_monte_carlo_demo.py`](robustness_monte_carlo_demo.py) | Randomized thickness+twist robustness sweep |
 | [`sensitivity_dashboard_demo.py`](sensitivity_dashboard_demo.py) | Finite-difference sensitivities and local sweeps |
 | [`csg_provenance_demo.py`](csg_provenance_demo.py) | Winner-label / nearest-interface / ambiguity maps |
+| [`brep_vs_implicit_offset_demo.py`](brep_vs_implicit_offset_demo.py) | Curve offset folds; the level set cannot |
 
 ---
 

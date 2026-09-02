@@ -27,6 +27,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.lines import Line2D
 
 _erp = Path(__file__).resolve().parent / "_ensure_repo_path.py"
 _spec = importlib.util.spec_from_file_location("_ensure_repo_path", _erp)
@@ -66,6 +67,9 @@ from blade_structure_utilities.geometry_utilities.coordinate_frames import (
 _DPI = DEFAULT_DPI
 _FIGSIZE_FULL = (14.0, 5.5)
 _FIGSIZE_ZOOM = (14.0, 10.0)
+
+_KIND_COLOUR = {"skin": "#2196F3", "web": "#4CAF50", "cap": "#F44336"}
+_JUNCTION_COLOUR = "#FFC107"
 
 
 def _build_section(af: AirfoilSDF) -> MultiCellSection:
@@ -188,16 +192,15 @@ def _pretty_label(label: object) -> str:
     return text
 
 
-def _overlay_strips(ax, strips, *, lw: float = 1.6) -> None:
-    kind_colour = {"skin": "#2196F3", "web": "#4CAF50", "cap": "#F44336"}
+def _overlay_strips(ax, strips, *, lw: float = 1.6, label_strips: bool = True) -> None:
     seen: set[str] = set()
     for strip in strips:
         pts = np.asarray(strip.midline_twisted_pitch_axis_blade_frame, dtype=float)
         if pts.shape[0] < 2:
             continue
-        colour = kind_colour.get(str(strip.kind), "#607D8B")
+        colour = _KIND_COLOUR.get(str(strip.kind), "#607D8B")
         pretty = _pretty_label(strip.label)
-        legend = pretty if pretty not in seen else None
+        legend = pretty if label_strips and pretty not in seen else None
         seen.add(pretty)
         _h, _v = section_plot_axes(pts)  # canonical B -> horizontal = Y_B
         ax.plot(_h, _v, color=colour, lw=lw, label=legend, alpha=0.95)
@@ -213,7 +216,7 @@ def _overlay_strips(ax, strips, *, lw: float = 1.6) -> None:
             )
 
 
-def _mark_points(ax, points: list[np.ndarray], *, colour: str, label: str) -> None:
+def _mark_points(ax, points: list[np.ndarray], *, colour: str, label: str | None) -> None:
     if not points:
         return
     xy = np.asarray(points, dtype=float).reshape(-1, 2)
@@ -228,6 +231,38 @@ def _mark_points(ax, points: list[np.ndarray], *, colour: str, label: str) -> No
         zorder=10,
         label=label,
     )
+
+
+def _draw_shared_key(fig, spare_axes) -> None:
+    """Draw one key for every zoom panel: three strip kinds plus the junction marker.
+
+    Hosted in the first unused grid cell when the panel count leaves one, so
+    ``tight_layout`` cannot push it over the data; otherwise it sits under the
+    figure title.
+    """
+    handles = [
+        Line2D([], [], color=colour, lw=2.0, label=kind)
+        for kind, colour in _KIND_COLOUR.items()
+    ]
+    handles.append(
+        Line2D(
+            [],
+            [],
+            marker="o",
+            linestyle="none",
+            markersize=7,
+            markerfacecolor=_JUNCTION_COLOUR,
+            markeredgecolor="k",
+            markeredgewidth=0.4,
+            label="junction (shared vertex)",
+        )
+    )
+
+    spare = list(spare_axes)
+    if spare:
+        spare[0].legend(handles=handles, loc="center", fontsize=11, frameon=False)
+    else:
+        fig.legend(handles=handles, loc="upper center", ncol=len(handles), fontsize=10)
 
 
 def _save_fig(fig, path: Path, *, presentation: bool = False) -> None:
@@ -314,13 +349,15 @@ def main(argv: list[str] | None = None) -> Path:
     axes_flat = np.atleast_1d(axes2).ravel()
     half = 0.035
     for ax, (title, centre) in zip(axes_flat, centres):
-        _overlay_strips(ax, topo, lw=2.0)
-        _mark_points(ax, [centre], colour="#FFC107", label="junction")
+        # One entry per strip label would be a 13-row legend sitting on top of the
+        # junction each panel exists to show; the shared key below carries it instead.
+        _overlay_strips(ax, topo, lw=2.0, label_strips=False)
+        _mark_points(ax, [centre], colour=_JUNCTION_COLOUR, label=None)
         _zoom_axes(ax, centre, half)
         ax.set_title(title, fontsize=10)
-        ax.legend(fontsize=7, loc="best")
     for ax in axes_flat[n:]:
         ax.axis("off")
+    _draw_shared_key(fig2, axes_flat[n:])
     fig2.suptitle(
         "Shell junction zooms - shared vertices after topology prep (NACA 2412 3-web box)",
         fontsize=12,

@@ -14,18 +14,29 @@ Run from the repository root:
 
 from __future__ import annotations
 
-from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
-    DEFAULT_DPI,
-    demo_output_dir,
-    save_figure,
-)
-
 import argparse
 import importlib.util
 import os
 import tempfile
 import time
 from pathlib import Path
+
+# Put the repo root on sys.path before the first package import, as every other
+# demo does. Without it this script only ran from inside ``src/``, and the
+# invocation in its own docstring raised ModuleNotFoundError.
+_erp = Path(__file__).resolve().parent / "_ensure_repo_path.py"
+_spec = importlib.util.spec_from_file_location("_ensure_repo_path", _erp)
+_ensure_mod = importlib.util.module_from_spec(_spec)
+assert _spec.loader is not None
+_spec.loader.exec_module(_ensure_mod)
+_ensure_mod.ensure_repo_path()
+
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
+    DEFAULT_DPI,
+    apply_presentation_style,
+    demo_output_dir,
+    save_figure,
+)
 
 # Enable phi-eval profiling before engine imports.
 os.environ.setdefault("SECTION_GEOMETRY_PROFILE", "1")
@@ -172,6 +183,118 @@ def _print_result(r: dict) -> None:
     print(f"  artifacts in      : {r['tmp']}")
 
 
+def _plot_throughput(
+    results: list[dict],
+    path: Path,
+    *,
+    stations_per_blade: int,
+    designs: int,
+    presentation: bool,
+) -> None:
+    """Per-station cost, and what it extrapolates to at blade and sweep scale.
+
+    The right-hand panel is an extrapolation, not a measurement, and is labelled
+    as one: it multiplies the measured per-station cost by a stated station
+    count. That is the honest way to answer "can this run inside a co-design
+    loop?", which is a question about blades and sweeps, not about one station.
+    """
+    import matplotlib
+
+    matplotlib.use("Agg", force=False)
+    import matplotlib.pyplot as plt
+
+    from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.palette import (
+        INK,
+        MUTED,
+        NAVY,
+        TEAL,
+    )
+
+    figure, (axis_stage, axis_scale) = plt.subplots(1, 2, figsize=(14.0, 5.2))
+
+    backends = [str(r["backend"]) for r in results]
+    positions = np.arange(len(results))
+    build_ms = [1000.0 * r["stage_s"]["build"] / r["n"] for r in results]
+    properties_ms = [1000.0 * r["stage_s"]["properties"] / r["n"] for r in results]
+
+    axis_stage.bar(positions, build_ms, width=0.55, color=NAVY, label="build")
+    axis_stage.bar(
+        positions, properties_ms, width=0.55, bottom=build_ms, color=TEAL, label="properties"
+    )
+    for position, result in zip(positions, results):
+        axis_stage.text(
+            position,
+            float(result["ms_per_station"]) * 1.03,
+            f"{float(result['ms_per_station']):.0f} ms",
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+            color=INK,
+        )
+    axis_stage.set_xticks(positions)
+    axis_stage.set_xticklabels(backends)
+    axis_stage.set_ylabel("wall time per station [ms]")
+    axis_stage.set_title("Where a station's time goes")
+    axis_stage.grid(True, axis="y", alpha=0.25)
+    axis_stage.legend(fontsize=9)
+
+    fastest = min(results, key=lambda r: float(r["ms_per_station"]))
+    seconds_per_station = float(fastest["ms_per_station"]) / 1000.0
+    tiers = [
+        ("one station", 1),
+        (f"one blade\n({stations_per_blade} stations)", stations_per_blade),
+        (
+            f"a {designs}-design sweep\n({designs * stations_per_blade:,} sections)",
+            designs * stations_per_blade,
+        ),
+    ]
+    tier_positions = np.arange(len(tiers))
+    tier_seconds = [seconds_per_station * count for _, count in tiers]
+    axis_scale.bar(
+        tier_positions, tier_seconds, width=0.55, color=NAVY
+    )
+    for position, seconds in zip(tier_positions, tier_seconds):
+        text = f"{seconds * 1000:.0f} ms" if seconds < 1.0 else f"{seconds:.1f} s"
+        axis_scale.text(
+            position,
+            seconds * 1.12,
+            text,
+            ha="center",
+            va="bottom",
+            fontsize=11,
+            fontweight="bold",
+            color=INK,
+        )
+    axis_scale.set_xticks(tier_positions)
+    axis_scale.set_xticklabels([label for label, _ in tiers], fontsize=10)
+    axis_scale.set_yscale("log")
+    axis_scale.set_ylabel("wall time [s]")
+    axis_scale.set_title(
+        f"Extrapolated from {fastest['backend']} at "
+        f"{float(fastest['ms_per_station']):.0f} ms/station, single core"
+    )
+    axis_scale.grid(True, axis="y", alpha=0.25)
+    # Under the axis rather than inside it: floated in the panel this caption sat
+    # across the "one station" bar.
+    axis_scale.set_xlabel(
+        "extrapolation: measured per-station cost × station count",
+        fontsize=8.5,
+        style="italic",
+        color=MUTED,
+    )
+
+    figure.suptitle(
+        "Geometry at co-design speed: a whole blade of sections in "
+        f"{seconds_per_station * stations_per_blade:.1f} s",
+        fontsize=13,
+    )
+    figure.tight_layout()
+    save_figure(figure, path, presentation=presentation)
+    plt.close(figure)
+    print(f"Wrote {path}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stations", type=int, default=20)
@@ -186,9 +309,32 @@ def main() -> None:
     )
     ap.add_argument("--plot", action="store_true", help="also render a PNG per station")
     ap.add_argument("--export", action="store_true", help="also write a section JSON per station")
+    ap.add_argument(
+        "--figure",
+        action="store_true",
+        help="write the throughput figure (implies --compare).",
+    )
+    ap.add_argument(
+        "--stations-per-blade",
+        type=int,
+        default=40,
+        help="Station count used for the extrapolated blade tier in --figure.",
+    )
+    ap.add_argument(
+        "--designs",
+        type=int,
+        default=100,
+        help="Design count used for the extrapolated sweep tier in --figure.",
+    )
+    ap.add_argument(
+        "--presentation",
+        action="store_true",
+        help="Larger fonts and higher DPI for slides/decks.",
+    )
     args = ap.parse_args()
+    apply_presentation_style(bool(args.presentation))
 
-    if args.compare:
+    if args.compare or args.figure:
         r_qt = _run_bench(args, "quadtree")
         _print_result(r_qt)
         r_hy = _run_bench(args, "hybrid")
@@ -196,6 +342,14 @@ def main() -> None:
         speedup = r_qt["properties_ms"] / max(r_hy["properties_ms"], 1e-9)
         print(f"\n  properties speedup (quadtree/hybrid): {speedup:.2f}x")
         print(f"  hybrid properties_ms/station: {r_hy['properties_ms']:.1f}")
+        if args.figure:
+            _plot_throughput(
+                [r_hy, r_qt],
+                demo_output_dir("manystation_bench") / "manystation_throughput.png",
+                stations_per_blade=int(args.stations_per_blade),
+                designs=int(args.designs),
+                presentation=bool(args.presentation),
+            )
         return
 
     r = _run_bench(args, args.backend)

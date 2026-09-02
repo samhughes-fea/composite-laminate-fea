@@ -47,6 +47,14 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     demo_output_dir,
     save_figure,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.palette import (
+    INK,
+    MUTED,
+    NAVY,
+    RED,
+    SURFACE,
+    TEAL,
+)
 
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
@@ -236,6 +244,239 @@ def _save_fig(fig, path: Path) -> None:
     print(f"Wrote {path}")
 
 
+#: Below this the two exact paths disagree by less than the comparison can
+#: resolve, so their reported error is a property of the measurement and not of
+#: the backend. Points are clamped here and the floor is drawn, because a
+#: clamped value plotted bare reads as a result.
+_ERROR_FLOOR = 1e-12
+
+_BACKEND_COLOURS = {
+    "constructive": NAVY,
+    "hybrid": TEAL,
+    "quadtree": "#EF6C00",
+    "grid": RED,
+}
+# Distinct markers so constructive and hybrid stay readable where they land on
+# top of each other, which is the whole point of the comparison.
+_BACKEND_MARKERS = {"constructive": "o", "hybrid": "s", "quadtree": "^", "grid": "D"}
+
+
+def _pareto_frontier(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Non-dominated points, ascending in wall time.
+
+    A point survives when nothing else is both faster and more accurate.
+    """
+    frontier: list[tuple[float, float]] = []
+    best_error = float("inf")
+    for x, y in sorted(points):
+        if y < best_error:
+            frontier.append((x, y))
+            best_error = y
+    return frontier
+
+
+def _plot_pareto(all_rows: list[dict[str, Any]], path: Path) -> None:
+    """Accuracy against cost, on one panel.
+
+    The empty middle of this plot is the message, not a defect: there is nothing
+    between the sampled backends and the exact ones, and the gap is annotated
+    rather than left as white space. Two twists share the panel — filled markers
+    at 0 degrees, hollow at 15 — because splitting them into two panels halved
+    each to say the same thing twice.
+    """
+    figure, axis = plt.subplots(figsize=(11.0, 4.8))
+
+    for row in all_rows:
+        backend = str(row["backend"])
+        x = max(float(row["wall_time_s"]), 1e-6)
+        y = max(float(row["mean_rel_area_err_vs_constructive"]), _ERROR_FLOOR)
+        twisted = row["tag"] != "twist_0deg"
+        colour = _BACKEND_COLOURS.get(backend, INK)
+        axis.scatter(
+            x,
+            y,
+            s=132,
+            facecolors="none" if twisted else colour,
+            edgecolors=colour,
+            marker=_BACKEND_MARKERS.get(backend, "o"),
+            linewidths=1.6,
+            zorder=4,
+        )
+
+    # Depth labels only on the untwisted series, and offset by rank rather than
+    # by depth: deep quadtrees converge onto each other, so a fixed offset puts
+    # d=7 and d=8 in the same few pixels and they overprint.
+    quadtree_rows = sorted(
+        (r for r in all_rows if r["backend"] == "quadtree" and r["tag"] == "twist_0deg"),
+        key=lambda r: float(r["wall_time_s"]),
+    )
+    for rank, row in enumerate(quadtree_rows):
+        axis.annotate(
+            f"d={int(row['max_depth'])}",
+            (max(float(row["wall_time_s"]), 1e-6),
+             max(float(row["mean_rel_area_err_vs_constructive"]), _ERROR_FLOOR)),
+            textcoords="offset points",
+            xytext=(12, 9) if rank % 2 == 0 else (12, -18),
+            fontsize=8.5,
+            color=_BACKEND_COLOURS["quadtree"],
+        )
+
+    axis.set_xscale("log")
+    axis.set_yscale("log")
+    axis.set_ylim(3e-14, 3.0)
+
+    # The frontier, drawn. It was called a Pareto plot and had no frontier on it.
+    # Here the frontier usually collapses to a single point, because the exact
+    # paths are simultaneously the fastest and the most accurate — which is the
+    # argument the slide is making, so say it rather than drawing a line of one.
+    frontier = _pareto_frontier(
+        [
+            (
+                max(float(r["wall_time_s"]), 1e-6),
+                max(float(r["mean_rel_area_err_vs_constructive"]), _ERROR_FLOOR),
+            )
+            for r in all_rows
+            if r["tag"] == "twist_0deg"
+        ]
+    )
+    if len(frontier) > 1:
+        axis.plot(
+            [p[0] for p in frontier],
+            [p[1] for p in frontier],
+            color=MUTED,
+            linewidth=1.2,
+            linestyle="--",
+            zorder=2,
+            label="Pareto frontier (0°)",
+        )
+        axis.legend(fontsize=8.5, loc="lower right")
+    else:
+        # Mid-right, not bottom-right: the floor caption already owns the bottom
+        # edge and the two overprinted.
+        axis.text(
+            0.985,
+            0.40,
+            "the frontier is one point: the exact paths are\n"
+            "both the fastest and the most accurate",
+            transform=axis.transAxes,
+            ha="right",
+            va="center",
+            fontsize=9.5,
+            color=INK,
+        )
+
+    # The measurement floor, declared.
+    axis.axhspan(3e-14, _ERROR_FLOOR, color=SURFACE, zorder=1)
+    axis.axhline(_ERROR_FLOOR, color=MUTED, linewidth=0.9, linestyle=":", zorder=2)
+    axis.text(
+        0.985,
+        _ERROR_FLOOR * 1.35,
+        f"at or below the measurement floor — clamped to {_ERROR_FLOOR:g}",
+        transform=axis.get_yaxis_transform(),
+        ha="right",
+        va="bottom",
+        fontsize=8.5,
+        style="italic",
+        color=MUTED,
+    )
+
+    # The two decisive numbers, computed rather than asserted.
+    untwisted = [r for r in all_rows if r["tag"] == "twist_0deg"]
+    exact = [r for r in untwisted if r["backend"] in ("constructive", "hybrid")]
+    grid_rows = [r for r in untwisted if r["backend"] == "grid"]
+    if exact and grid_rows:
+        exact_time = min(float(r["wall_time_s"]) for r in exact)
+        grid_row = grid_rows[0]
+        grid_time = float(grid_row["wall_time_s"])
+        grid_error = max(float(grid_row["mean_rel_area_err_vs_constructive"]), _ERROR_FLOOR)
+        speedup = grid_time / exact_time if exact_time > 0 else float("nan")
+        orders = np.log10(grid_error / _ERROR_FLOOR)
+
+        axis.annotate(
+            "",
+            xy=(exact_time, _ERROR_FLOOR),
+            xytext=(exact_time, grid_error),
+            arrowprops={"arrowstyle": "<->", "color": INK, "linewidth": 1.3},
+            zorder=5,
+        )
+        # "At least": the exact paths' measured error is zero, so the ratio
+        # against the clamp is a lower bound on the true separation, not an
+        # estimate of it.
+        axis.text(
+            exact_time * 1.22,
+            np.sqrt(grid_error * _ERROR_FLOOR),
+            f"≥{orders:.0f} orders\nmore accurate",
+            fontsize=10.5,
+            fontweight="bold",
+            color=INK,
+            va="center",
+        )
+        # Well below the quadtree cluster, in the empty band: at the grid's own
+        # error this arrow ran straight through the d=5..d=8 points and their
+        # labels, and the caption sat on top of a marker.
+        speed_arrow_y = 1e-5
+        axis.annotate(
+            "",
+            xy=(exact_time, speed_arrow_y),
+            xytext=(grid_time, speed_arrow_y),
+            arrowprops={"arrowstyle": "<->", "color": INK, "linewidth": 1.3},
+            zorder=5,
+        )
+        axis.text(
+            np.sqrt(exact_time * grid_time),
+            speed_arrow_y * 3.0,
+            f"~{speedup:.0f}x faster",
+            fontsize=10.5,
+            fontweight="bold",
+            color=INK,
+            ha="center",
+        )
+
+    # Direct labels instead of a legend box: the backends sit in well-separated
+    # clusters, so naming them where they are beats a key in a corner.
+    # (offset, which point to hang the label on). The quadtree label hangs off a
+    # mid-depth point and sits to its left: anchored on the shallowest point it
+    # landed under the 15-degree markers, which cluster at the top of the panel.
+    label_anchors = {
+        "grid": ((-6, 20), "fastest"),
+        "quadtree": ((-52, 2), "middle"),
+        "constructive": ((4, -26), "fastest"),
+        "hybrid": ((-30, 6), "fastest"),
+    }
+    for backend, (offset, anchor_rule) in label_anchors.items():
+        rows = sorted(
+            (r for r in untwisted if r["backend"] == backend),
+            key=lambda r: float(r["wall_time_s"]),
+        )
+        if not rows:
+            continue
+        row = rows[0] if anchor_rule == "fastest" else rows[len(rows) // 2]
+        axis.annotate(
+            backend,
+            (
+                max(float(row["wall_time_s"]), 1e-6),
+                max(float(row["mean_rel_area_err_vs_constructive"]), _ERROR_FLOOR),
+            ),
+            textcoords="offset points",
+            xytext=offset,
+            fontsize=10.5,
+            fontweight="bold",
+            color=_BACKEND_COLOURS[backend],
+            ha="center",
+        )
+
+    axis.set_xlabel("wall time [s]  →  slower")
+    axis.set_ylabel("mean rel. area error vs constructive  →  worse")
+    axis.set_title(
+        "Section property backends (2D-CN NACA 2412) — lower-left is better\n"
+        "filled = 0° twist · hollow = 15° twist",
+        fontsize=12,
+    )
+    axis.grid(True, which="major", alpha=0.30)
+
+    _save_fig(figure, path)
+
+
 def main(argv: list[str] | None = None) -> Path:
     default_out = Path(__file__).resolve().parents[1] / "output" / "props_cost"
     parser = argparse.ArgumentParser(description=__doc__)
@@ -250,53 +491,7 @@ def main(argv: list[str] | None = None) -> Path:
         section = _build(af, twist_rad=twist)
         all_rows.extend(_run_case(section, af, twist_rad=twist, tag=tag))
 
-    # Pareto: one panel per twist tag
-    tags = sorted({r["tag"] for r in all_rows})
-    fig, axes = plt.subplots(1, len(tags), figsize=(6.0 * len(tags), 4.8), squeeze=False)
-    colours = {
-        "constructive": "#1565C0",
-        "hybrid": "#2E7D32",
-        "quadtree": "#EF6C00",
-        "grid": "#6A1B9A",
-    }
-    for ax, tag in zip(axes[0], tags):
-        subset = [r for r in all_rows if r["tag"] == tag]
-        for r in subset:
-            x = max(float(r["wall_time_s"]), 1e-6)
-            y = max(float(r["mean_rel_area_err_vs_constructive"]), 1e-12)
-            be = str(r["backend"])
-            lab = be
-            if be == "quadtree":
-                lab = f"QT d={r['max_depth']}"
-            ax.scatter(
-                x,
-                y,
-                s=90,
-                c=colours.get(be, "k"),
-                edgecolors="k",
-                linewidths=0.4,
-                zorder=3,
-                label=lab,
-            )
-            ax.annotate(
-                lab,
-                (x, y),
-                textcoords="offset points",
-                xytext=(6, 4),
-                fontsize=7,
-            )
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.set_xlabel("wall time [s]")
-        ax.set_ylabel("mean rel. area err vs constructive")
-        ax.set_title(f"Accuracy–cost Pareto — {tag.replace('_', ' ')}")
-        ax.grid(True, which="both", alpha=0.35)
-        ax.legend(fontsize=7, loc="best")
-    fig.suptitle(
-        "Section property backends (2D-CN NACA 2412) — lower-left is better",
-        fontsize=12,
-    )
-    _save_fig(fig, out_dir / "props_cost_pareto.png")
+    _plot_pareto(all_rows, out_dir / "props_cost_pareto.png")
 
     # Table figure
     fig2, ax2 = plt.subplots(figsize=(11.5, 0.45 * len(all_rows) + 1.8))

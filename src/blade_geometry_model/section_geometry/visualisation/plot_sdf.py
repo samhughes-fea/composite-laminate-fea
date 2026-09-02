@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
+
+from .palette import SDF_COLORMAP, draw_distance_field
 
 
 def plot_sdf_field(
@@ -13,9 +16,11 @@ def plot_sdf_field(
     title="SDF field",
     colorbar=True,
     contour_zero=True,
-    cmap="RdBu_r",
+    cmap=None,
     vmax=None,
     *,
+    distance_bands: bool = True,
+    band_count: int = 8,
     twist_rad: float = 0.0,
     chord_m: float | None = None,
     structural_axes: bool = True,
@@ -37,9 +42,19 @@ def plot_sdf_field(
     colorbar : bool
     contour_zero : bool
         Overlay the zero-level-set as a solid black line.
-    cmap : str
+    cmap : str, Colormap or None
+        Defaults to the shared trimmed diverging map (``palette.SDF_COLORMAP``).
     vmax : float or None
-        Colour scale symmetric about zero; defaults to max(|phi|).
+        Explicit symmetric clip about zero. When omitted the scale is derived
+        from the field itself and clipped to the feature scale, so a thin
+        feature in a large domain does not render as a hairline on a saturated
+        ground (see ``palette.distance_field_norm``).
+    distance_bands : bool
+        Overlay iso-distance contours away from the zero level set. On by
+        default: the banding is what makes a field read as a *distance* field
+        rather than a coloured blob.
+    band_count : int
+        Approximate number of bands between the zero set and the outer clip.
     twist_rad, chord_m
         NACA→B remap for structural axes (pitch pivot at origin). ``chord_m``
         defaults to the grid x-span when omitted.
@@ -98,23 +113,26 @@ def plot_sdf_field(
     else:
         X_plot, Y_plot = grid.X, grid.Y
 
-    if vmax is None:
-        vmax = float(np.abs(phi_plot).max()) if phi_plot.size else 1.0
+    # An explicit vmax stays exactly symmetric — callers who set it are pinning a
+    # scale across panels and must not have it silently re-derived.
+    explicit_norm = None
+    if vmax is not None:
+        explicit_norm = Normalize(vmin=-float(vmax), vmax=float(vmax))
 
-    im = ax.pcolormesh(
+    im = draw_distance_field(
+        ax,
         X_plot,
         Y_plot,
         phi_plot,
-        cmap=cmap,
-        vmin=-vmax,
-        vmax=vmax,
-        shading="auto",
+        norm=explicit_norm,
+        colormap=cmap if cmap is not None else SDF_COLORMAP,
+        band_count=int(band_count),
+        draw_bands=bool(distance_bands),
+        draw_zero=bool(contour_zero),
+        zero_line_width=1.5,
     )
     if colorbar:
         fig.colorbar(im, ax=ax, label="φ (m)")
-
-    if contour_zero:
-        ax.contour(X_plot, Y_plot, phi_plot, levels=[0.0], colors="k", linewidths=1.5)
 
     ax.set_title(title)
     if structural_axes:

@@ -42,6 +42,12 @@ Shared save helpers: [`../figure_io.py`](../figure_io.py) (`save_figure`,
 | `quadtree_union/` | `quadtree_union_mesh.py` | Union quadtree meshes |
 | `quadtree_convergence/` | `quadtree_convergence_study.py` | Depth vs dense grid |
 | `props_cost/` | `props_cost_demo.py` | Hybrid vs quadtree cost |
+| `manystation_bench/` | `manystation_bench.py --figure` | Per-station cost and blade-scale throughput |
+| `design_vector_morph/` | `design_vector_morph.py` | One design vector driving solids, midlines and mesh (GIF + still) |
+| `brep_vs_implicit_offset/` | `brep_vs_implicit_offset_demo.py` | Curve offset folding vs level-set offset |
+| `api_quickstart/` | `api_quickstart_demo.py` | The public quickstart, run, with its result inventory |
+| `sensitivity_dashboard/` | `sensitivity_dashboard_demo.py` | Derivatives; `sensitivity_slide.png` is the slide cut |
+| `spanwise_yz_plan_flyover/` | `spanwise_yz_plan_flyover.py` | Spanwise web tracks, station-relative vs root-anchored |
 | `section_properties_dashboard/` | `section_properties_dashboard.py` | Area / inertia panels |
 | `flythroughs/` / `gifs/` | `feature_flythroughs.py` | Scenario GIFs |
 

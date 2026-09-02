@@ -34,6 +34,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import TwoSlopeNorm
 
 _erp = Path(__file__).resolve().parent / "_ensure_repo_path.py"
 _spec = importlib.util.spec_from_file_location("_ensure_repo_path", _erp)
@@ -46,6 +47,9 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     DEFAULT_DPI,
     demo_output_dir,
     save_figure,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.palette import (
+    draw_distance_field,
 )
 
 from blade_structure_utilities.geometry_utilities.section_geometry import SDFGrid
@@ -75,6 +79,15 @@ _LEFT_SHAPE = Circle(cx=-0.22, cy=0.0, r=0.42)
 _RIGHT_SHAPE = Circle(cx=0.22, cy=0.0, r=0.42)
 _BAR_SHAPE = Capsule(ax=-0.55, ay=-0.30, bx=0.55, by=0.30, r=0.16)
 
+# One colour scale across every panel: the reader is comparing operators, not
+# inputs, so a per-panel norm would make identical fields look different. The
+# inner limit is the operand radius, so a full circle spends the whole blue
+# half; the outer is clipped at twice that, which is what stops the far field
+# flooding the panel with saturated colour and hiding the banding.
+_FIELD_INNER_LIMIT = 0.42
+_FIELD_OUTER_LIMIT = 0.84
+_FIELD_BAND_INTERVAL = 0.105
+
 
 def _save(fig, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -93,9 +106,16 @@ def draw_operator_panel(
     operand_fields: tuple[np.ndarray, ...] = (),
 ) -> None:
     """Field, interface, and the operand interfaces it was built from."""
-    limit = 0.55
-    axis.pcolormesh(
-        grid.X, grid.Y, phi, cmap="RdBu_r", vmin=-limit, vmax=limit, shading="auto"
+    draw_distance_field(
+        axis,
+        grid.X,
+        grid.Y,
+        phi,
+        norm=TwoSlopeNorm(
+            vcenter=0.0, vmin=-_FIELD_INNER_LIMIT, vmax=_FIELD_OUTER_LIMIT
+        ),
+        band_interval=_FIELD_BAND_INTERVAL,
+        zero_line_width=2.0,
     )
     for operand in operand_fields:
         axis.contour(

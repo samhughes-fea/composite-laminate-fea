@@ -29,9 +29,17 @@ def demo_output_dir(
 
 
 def apply_presentation_style(presentation: bool) -> None:
-    """Bump tick/legend/title fonts when ``presentation`` is true."""
+    """Apply the slide-facing style when ``presentation`` is true.
+
+    Fonts, but also the chrome: a figure headed for a slide wants a lighter
+    frame and a quieter grid than one headed for a docs page, and it wants the
+    deck's ink colour rather than pure black. Everything here is deliberately
+    reversible — ``--presentation`` off leaves matplotlib defaults alone.
+    """
     if not presentation:
         return
+    from .palette import INK, MUTED
+
     mpl.rcParams.update(
         {
             "font.size": 12,
@@ -41,6 +49,23 @@ def apply_presentation_style(presentation: bool) -> None:
             "ytick.labelsize": 11,
             "legend.fontsize": 10,
             "figure.titlesize": 16,
+            # Chrome: recede, so the geometry carries the panel.
+            "axes.edgecolor": MUTED,
+            "axes.linewidth": 0.8,
+            "axes.labelcolor": INK,
+            "axes.titlecolor": INK,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+            "text.color": INK,
+            "xtick.color": MUTED,
+            "ytick.color": MUTED,
+            "xtick.labelcolor": INK,
+            "ytick.labelcolor": INK,
+            "grid.color": "#d7dce3",
+            "grid.linewidth": 0.6,
+            "legend.frameon": False,
+            "figure.facecolor": "white",
+            "savefig.facecolor": "white",
         }
     )
 

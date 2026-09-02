@@ -111,36 +111,42 @@ def _point_to_segments_gap(pts: np.ndarray, poly: np.ndarray) -> np.ndarray:
     return out
 
 
-def _gap_metrics(constructive_ring: np.ndarray, zero_contours: list[np.ndarray]) -> dict:
-    if not zero_contours:
-        return {
-            "max_gap_m": float("nan"),
-            "mean_gap_m": float("nan"),
-            "n_sample": 0,
-            "n_zero_polylines": 0,
-        }
-    # Sample constructive ring; measure distance to nearest φ=0 polyline.
-    ring = constructive_ring
+def _per_point_gap(constructive_ring: np.ndarray, zero_contours: list[np.ndarray]):
+    """Gap at each sampled ring point, against normalised arc length round the ring.
+
+    Overlaying the two boundaries shows only that they coincide. Walking the gap
+    round the ring shows *where* they part company and by how much.
+    """
+    ring = np.asarray(constructive_ring, dtype=float)
     step = max(1, ring.shape[0] // 120)
     samples = ring[::step]
-    gaps = []
-    for cont in zero_contours:
-        if cont.shape[0] < 2:
-            continue
-        gaps.append(_point_to_segments_gap(samples, cont))
-    if not gaps:
+    gaps = [
+        _point_to_segments_gap(samples, cont)
+        for cont in zero_contours
+        if cont.shape[0] >= 2
+    ]
+    if samples.shape[0] == 0 or not gaps:
+        return np.zeros(0, dtype=float), np.zeros(0, dtype=float), samples
+
+    per_point = np.min(np.stack(gaps, axis=0), axis=0)
+    step_lengths = np.linalg.norm(np.diff(samples, axis=0), axis=1)
+    arc = np.concatenate([[0.0], np.cumsum(step_lengths)])
+    total = float(arc[-1]) if arc[-1] > 0.0 else 1.0
+    return arc / total, per_point, samples
+
+
+def _gap_metrics(constructive_ring: np.ndarray, zero_contours: list[np.ndarray]) -> dict:
+    _, per_point, samples = _per_point_gap(constructive_ring, zero_contours)
+    if per_point.size == 0:
         return {
             "max_gap_m": float("nan"),
             "mean_gap_m": float("nan"),
-            "n_sample": int(samples.shape[0]),
-            "n_zero_polylines": 0,
+            "n_sample": int(samples.shape[0]) if samples.size else 0,
+            "n_zero_polylines": len(zero_contours),
         }
-    # Min over contours per sample, then aggregate.
-    stacked = np.stack(gaps, axis=0)
-    per_pt = np.min(stacked, axis=0)
     return {
-        "max_gap_m": float(np.max(per_pt)),
-        "mean_gap_m": float(np.mean(per_pt)),
+        "max_gap_m": float(np.max(per_point)),
+        "mean_gap_m": float(np.mean(per_point)),
         "n_sample": int(samples.shape[0]),
         "n_zero_polylines": len(zero_contours),
     }
@@ -168,11 +174,14 @@ def main(argv: list[str] | None = None) -> Path:
 
     fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.0))
     metrics: dict[str, dict] = {}
+    residual_tracks: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for ax, label in zip(axes.ravel(), _COMPARE_LABELS):
         geom = polys[label]
         ring = _ring_from_geom(geom)
         phi = grid.eval(section[label])
         zero = grid.zero_contour(phi)
+        arc, per_point, _ = _per_point_gap(ring, zero)
+        residual_tracks[label] = (arc, per_point)
         ax.plot(ring[:, 0], ring[:, 1], color="#1565C0", lw=1.8, label="constructive")
         for i, cont in enumerate(zero):
             ax.plot(
@@ -210,6 +219,74 @@ def main(argv: list[str] | None = None) -> Path:
         fontsize=12,
     )
     _save_fig(fig, out_dir / "dual_rep_boundary_overlay.png")
+
+    # --- Where the two representations actually part company ---
+    # The overlay above is deliberately dull: the curves sit on top of each other.
+    # Walk the gap round each ring instead, and the sampling cell explains it.
+    half_cell = 0.5 * float(max(grid.dx, grid.dy))
+    fig_r, (ax_track, ax_area) = plt.subplots(1, 2, figsize=(13.0, 4.8))
+    track_colours = {
+        "skin_suction_surface": "#1565C0",
+        "skin_pressure_surface": "#42A5F5",
+        "shear_web_0": "#2E7D32",
+        "spar_cap_suction_surface": "#E53935",
+    }
+    for label in _COMPARE_LABELS:
+        arc, per_point = residual_tracks.get(label, (np.zeros(0), np.zeros(0)))
+        if per_point.size == 0:
+            continue
+        ax_track.semilogy(
+            arc,
+            np.maximum(per_point, 1e-9) * 1e3,
+            lw=1.6,
+            color=track_colours.get(label, "#607D8B"),
+            label=label,
+        )
+    ax_track.axhline(
+        half_cell * 1e3,
+        color="0.35",
+        ls="--",
+        lw=1.6,
+        label=f"half a grid cell ({half_cell * 1e3:.2f} mm)",
+    )
+    ax_track.set_xlabel("normalised arc length round the region boundary")
+    ax_track.set_ylabel("gap: constructive to φ=0  [mm]")
+    ax_track.set_title("The disagreement is bounded by the sampling cell")
+    ax_track.grid(True, which="both", alpha=0.3)
+    ax_track.legend(fontsize=7, loc="lower right")
+
+    # Relative area error against how thin the region is. The web is the outlier
+    # not because the field is wrong but because the feature is 4 mm across.
+    widths_mm, rel_errs, names = [], [], []
+    for label in _COMPARE_LABELS:
+        m = metrics.get(label)
+        if not m or not np.isfinite(m["area_rel_err"]):
+            continue
+        ring = _ring_from_geom(polys[label])
+        extent = ring.max(axis=0) - ring.min(axis=0)
+        widths_mm.append(float(np.min(extent)) * 1e3)
+        rel_errs.append(float(m["area_rel_err"]))
+        names.append(label)
+    if widths_mm:
+        ax_area.loglog(widths_mm, rel_errs, "o", ms=10, color="#6A1B9A")
+        for w, e, n in zip(widths_mm, rel_errs, names):
+            ax_area.annotate(
+                n.replace("_surface", "").replace("_", " "),
+                xy=(w, e),
+                xytext=(6, 4),
+                textcoords="offset points",
+                fontsize=8,
+            )
+        ax_area.set_xlabel("narrowest extent of the region [mm]")
+        ax_area.set_ylabel("relative area error  ΔA / A")
+        ax_area.set_title("Thin features are where a sampled area stops being usable")
+        ax_area.grid(True, which="both", alpha=0.3)
+
+    fig_r.suptitle(
+        "Two representations: where they agree, and exactly where they do not",
+        fontsize=12,
+    )
+    _save_fig(fig_r, out_dir / "dual_rep_residual_track.png")
 
     # Residual inserts on hybrid mesh.
     spec = quadtree_spec_for_airfoil(af, chord=1.0, max_depth=7, max_cells=120000)

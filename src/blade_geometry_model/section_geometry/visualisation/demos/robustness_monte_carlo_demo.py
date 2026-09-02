@@ -158,9 +158,15 @@ def main(argv: list[str] | None = None) -> int:
     ax1.set_ylabel("count")
     ax1.grid(True, alpha=0.25)
 
+    # area is m^2 and the inertias m^4, so a shared raw axis buries two of the three
+    # boxes at the baseline. Normalise each response by its own median to compare the
+    # spreads rather than the magnitudes.
     metrics = [np.array(ok_area, dtype=float), np.array(ok_ixx, dtype=float), np.array(ok_iyy, dtype=float)]
-    ax2.boxplot(metrics, tick_labels=["area", "Ixx", "Iyy"], showfliers=False)
+    normalised = [m / np.median(m) if m.size and np.median(m) != 0.0 else m for m in metrics]
+    ax2.boxplot(normalised, tick_labels=["area", "Ixx", "Iyy"], showfliers=False)
+    ax2.axhline(1.0, color="#616161", lw=0.9, ls="--", zorder=0)
     ax2.set_title("Valid-sample response spread")
+    ax2.set_ylabel("response / median")
     ax2.grid(True, axis="y", alpha=0.25)
 
     sc = ax3.scatter(twdev_vals, area_vals, c=np.where(ok_mask, 1.0, 0.0), cmap="coolwarm", alpha=0.7, s=28)

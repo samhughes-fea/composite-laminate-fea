@@ -122,6 +122,45 @@ def _skin_midline_te_gap_from_mid(mid: np.ndarray, af: AirfoilSDF) -> dict:
     }
 
 
+def _storage_to_plot(pts: np.ndarray, chord: float) -> np.ndarray:
+    """Storage (x_chord, y_thickness) -> the untwisted plot frame used by plot_section.
+
+    ``plot_section`` draws in the canonical B frame (horizontal = Y_B, measured from
+    the pitch axis), so a zoom window expressed in storage coordinates lands nowhere
+    near the section.
+    """
+    pts = np.asarray(pts, dtype=float).reshape(-1, 2)
+    b = naca_to_twisted_pitch_axis_blade_frame(pts, 0.0, float(chord))
+    h, v = section_plot_axes(b)
+    return np.column_stack([np.asarray(h, dtype=float), np.asarray(v, dtype=float)])
+
+
+def _sampled_nose_deviation(af: AirfoilSDF, nx: int, *, window_x: float = 0.05, padding: float = 0.02):
+    """Contour the airfoil field on an nx-wide square-celled grid over the nose.
+
+    Returns the worst deviation of that sampled boundary from the true one. Because
+    ``af`` is itself the exact signed distance, ``|af(p)|`` at a sampled contour
+    point *is* that point's distance to the real boundary — no nearest-point search
+    and no discretisation of the reference.
+    """
+    verts = np.asarray(af.vertices, dtype=float)
+    x_min, x_max = verts[:, 0].min() - padding, verts[:, 0].max() + padding
+    y_min, y_max = verts[:, 1].min() - padding, verts[:, 1].max() + padding
+    cell = (x_max - x_min) / float(nx - 1)
+    ny = max(4, int(round((y_max - y_min) / cell)) + 1)
+
+    grid = SDFGrid.from_bbox(x_min, x_max, y_min, y_max, nx=int(nx), ny=int(ny))
+    segments = grid.zero_contour(grid.eval(af))
+
+    deviation = 0.0
+    for seg in segments:
+        in_window = seg[:, 0] <= float(window_x)
+        if in_window.any():
+            phi_here = np.abs(np.asarray(af(seg[in_window, 0], seg[in_window, 1]), dtype=float))
+            deviation = max(deviation, float(np.max(phi_here)))
+    return deviation, float(cell), segments
+
+
 def _save_fig(fig, path: Path) -> None:
     fig.tight_layout()
     save_figure(fig, path)
@@ -172,9 +211,12 @@ def main(argv: list[str] | None = None) -> Path:
         apply_structural_section_axes,
     )
 
+    # plot_section draws in the plot frame, so the zoom and the marker have to be
+    # taken there too — in storage coordinates this window misses the section.
+    te_plot = _storage_to_plot(te, af.chord)[0]
     for ax in axes:
-        _zoom(ax, te[0] - 0.08, te[0] + 0.02, te[1] - 0.04, te[1] + 0.04)
-        ax.plot(te[0], te[1], "k*", ms=10, label="aero TE")
+        _zoom(ax, te_plot[0] - 0.02, te_plot[0] + 0.08, te_plot[1] - 0.04, te_plot[1] + 0.04)
+        ax.plot(te_plot[0], te_plot[1], "k*", ms=10, label="aero TE")
         ax.legend(fontsize=8, loc="upper left")
         apply_structural_section_axes(ax)
     fig.suptitle("TE tip exactness — NACA 2412 twin-web (family D)", fontsize=12)
@@ -264,6 +306,76 @@ def main(argv: list[str] | None = None) -> Path:
     axes3[1].legend(fontsize=8)
     fig3.suptitle("LE nose exactness — AirfoilSDF polyhedral kernel", fontsize=12)
     _save_fig(fig3, out_dir / "le_nose_sdf_fidelity.png")
+
+    # --- 3b. What sampling costs you at the nose ---
+    # The flat 1e-16 result above proves the absence of a problem the reader has
+    # never seen. Draw the problem: contour the same field off a grid and watch
+    # the nose facet away.
+    resolutions = (48, 96, 192, 384)
+    nose_rows: list[dict] = []
+    fig3b, axes3b = plt.subplots(1, 2, figsize=(13.0, 5.4))
+
+    ax_nose, ax_err = axes3b
+    colours = plt.cm.viridis(np.linspace(0.08, 0.82, len(resolutions)))
+
+    for colour, nx in zip(colours, resolutions):
+        deviation, cell, segments = _sampled_nose_deviation(af, nx)
+        if not segments:
+            continue
+        nose_rows.append({"nx": int(nx), "cell_m": cell, "nose_deviation_m": deviation})
+        for k, seg in enumerate(segments):
+            ax_nose.plot(
+                seg[:, 0],
+                seg[:, 1],
+                color=colour,
+                lw=1.6,
+                label=f"sampled, cell {cell * 1e3:.1f} mm" if k == 0 else None,
+                zorder=3,
+            )
+
+    ax_nose.plot(
+        np.r_[verts[:, 0], verts[0, 0]],
+        np.r_[verts[:, 1], verts[0, 1]],
+        "k-",
+        lw=2.4,
+        label="exact polyhedral SDF",
+        zorder=5,
+    )
+    ax_nose.plot(le[0], le[1], "k*", ms=13, zorder=6)
+    ax_nose.set_xlim(le[0] - 0.008, le[0] + 0.05)
+    ax_nose.set_ylim(le[1] - 0.030, le[1] + 0.030)
+    ax_nose.set_aspect("equal", adjustable="box")
+    ax_nose.grid(True, alpha=0.3)
+    ax_nose.set_xlabel(r"$x_{chord}$ [m]")
+    ax_nose.set_ylabel(r"$y_{thickness}$ [m]")
+    ax_nose.set_title("Sample the field and the nose facets away")
+    ax_nose.legend(fontsize=8, loc="lower right")
+
+    if nose_rows:
+        cells = np.array([r["cell_m"] for r in nose_rows], dtype=float)
+        errs = np.array([max(r["nose_deviation_m"], 1e-18) for r in nose_rows], dtype=float)
+        ax_err.loglog(cells * 1e3, errs * 1e3, "o-", color="#C62828", ms=7, lw=1.8,
+                      label="marching squares on a sampled grid")
+        # The exact path's error is what |phi| already measured on the vertex loop.
+        exact_floor_m = max(float(np.max(phi_v)), 1e-17)
+        ax_err.axhline(
+            exact_floor_m * 1e3,
+            color="#2E7D32",
+            ls="--",
+            lw=2.0,
+            label="exact polyhedral SDF (machine epsilon)",
+        )
+        ax_err.set_xlabel("grid cell size [mm]")
+        ax_err.set_ylabel("worst deviation from the true nose [mm]")
+        ax_err.set_title("The nose is only ever as sharp as the cell")
+        ax_err.grid(True, which="both", alpha=0.3)
+        ax_err.legend(fontsize=8, loc="lower right")
+
+    fig3b.suptitle(
+        "Why the aerofoil is evaluated, never sampled — LE nose, NACA 2412",
+        fontsize=12,
+    )
+    _save_fig(fig3b, out_dir / "le_nose_grid_vs_exact.png")
 
     # --- 4. Twist case: B-frame LE/TE ---
     twist = float(np.radians(15.0))

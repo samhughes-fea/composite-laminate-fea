@@ -38,6 +38,7 @@ _ensure_mod.ensure_repo_path()
 
 from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
     DEFAULT_DPI,
+    apply_presentation_style,
     demo_output_dir,
     save_figure,
 )
@@ -116,9 +117,9 @@ def _zoom(ax, x0, x1, y0, y1) -> None:
     ax.grid(True, alpha=0.3)
 
 
-def _save_fig(fig, path: Path) -> None:
+def _save_fig(fig, path: Path, *, presentation: bool = False) -> None:
     fig.tight_layout()
-    save_figure(fig, path)
+    save_figure(fig, path, presentation=presentation)
     plt.close(fig)
     print(f"Wrote {path}")
 
@@ -132,7 +133,14 @@ def main(argv: list[str] | None = None) -> Path:
         default=default_out,
         help=f"Output directory (default: {default_out})",
     )
+    parser.add_argument(
+        "--presentation",
+        action="store_true",
+        help="Larger fonts and higher DPI for slides/decks.",
+    )
     args = parser.parse_args(argv)
+    presentation = bool(args.presentation)
+    apply_presentation_style(presentation)
     out_dir: Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -168,7 +176,7 @@ def main(argv: list[str] | None = None) -> Path:
         fontsize=11,
         y=1.02,
     )
-    _save_fig(fig, out_dir / "inserts_hybrid_quadtree.png")
+    _save_fig(fig, out_dir / "inserts_hybrid_quadtree.png", presentation=presentation)
 
     # --- LE / TE zooms ---
     le = np.asarray(af.leading_edge, dtype=float)
@@ -203,7 +211,7 @@ def main(argv: list[str] | None = None) -> Path:
         "Inserts use Offset(airfoil, -skin_thickness) — cavity interface, not skin mid-surface",
         fontsize=11,
     )
-    _save_fig(fig2, out_dir / "inserts_le_te_zooms.png")
+    _save_fig(fig2, out_dir / "inserts_le_te_zooms.png", presentation=presentation)
 
     areas: dict[str, float] = {}
     for lab, props in report.to_dict().items():

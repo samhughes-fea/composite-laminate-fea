@@ -38,6 +38,7 @@ _ensure_mod.ensure_repo_path()
 
 from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.figure_io import (
     DEFAULT_DPI,
+    apply_presentation_style,
     demo_output_dir,
     save_figure,
 )
@@ -47,11 +48,16 @@ from blade_structure_utilities.geometry_utilities.section_geometry import (
     MultiCellSection,
     SDFGrid,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.interface import (
+# ``interface/`` is a re-export shim and carries none of these any more: the
+# midline builder moved to ``midlines/`` and the loop builder to
+# ``cell_wall_loops/``, alongside the rest of their own stage.
+from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shell_midline_export import (
     build_shell_midline_strips,
-    build_void_cell_wall_loops,
-    plot_section,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops.void_cell_loop_builders import (
+    build_void_cell_wall_loops,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry import plot_section
 from blade_structure_utilities.geometry_utilities.coordinate_frames import (
     section_plot_axes,
 )
@@ -303,9 +309,9 @@ def _plot_section_with_loops(ax, section, grid, strips, loops, title: str) -> No
     )
 
 
-def _save_fig(fig, path: Path) -> None:
+def _save_fig(fig, path: Path, *, presentation: bool = False) -> None:
     fig.tight_layout()
-    save_figure(fig, path)
+    save_figure(fig, path, presentation=presentation)
     plt.close(fig)
     print(f"Wrote {path}")
 
@@ -319,7 +325,14 @@ def main(argv: list[str] | None = None) -> Path:
         default=default_out,
         help=f"Output directory (default: {default_out})",
     )
+    parser.add_argument(
+        "--presentation",
+        action="store_true",
+        help="Larger fonts and higher DPI for slides/decks.",
+    )
     args = parser.parse_args(argv)
+    presentation = bool(args.presentation)
+    apply_presentation_style(presentation)
     out_dir: Path = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -358,7 +371,7 @@ def main(argv: list[str] | None = None) -> Path:
                 f"(NACA 2412, family A, {n_webs} web(s) → {len(loops_a)} loop(s))"
             ),
         )
-        _save_fig(fig, out_dir / f"void_cell_wall_loops_{name}.png")
+        _save_fig(fig, out_dir / f"void_cell_wall_loops_{name}.png", presentation=presentation)
 
         # Family D (A if 0 webs) — structural section + dashed centreline loops
         section_d = _build_section(af, fracs, structural_family="D")
@@ -378,7 +391,7 @@ def main(argv: list[str] | None = None) -> Path:
                 f"(NACA 2412, family {fam}, {n_webs} web(s) → {len(loops_d)} loop(s))"
             ),
         )
-        _save_fig(fig2, out_dir / f"void_cell_wall_loops_on_section_{name}.png")
+        _save_fig(fig2, out_dir / f"void_cell_wall_loops_on_section_{name}.png", presentation=presentation)
         print(f"  {name}: n_webs={n_webs}, n_loops={len(loops_d)}, family={fam}")
 
     json_path = out_dir / "void_cell_wall_loops.json"
