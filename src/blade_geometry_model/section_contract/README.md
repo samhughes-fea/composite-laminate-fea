@@ -123,7 +123,7 @@ one consistent emit.
 - No MITC4 element count (`n_elements` is mesh / FE policy)
 - No laminate stack (material bind assigns layups)
 - No FE junction DOF clustering (geometric junctions in
-  `section_geometry.interface.shell_strip_topology`; kinematic junctions at
+  `section_geometry.topology.shell_strip_topology`; kinematic junctions at
   assembly from `SectionStripMesh`)
 
 This keeps the contract stable as FE kernel choices evolve.
@@ -360,7 +360,7 @@ Production producers should emit strips via
 - Coordinate frames: [`../coordinate_frames/README.md`](../coordinate_frames/README.md)
 - B / S / S′: [`../coordinate_frames/section_frames/README.md`](../coordinate_frames/section_frames/README.md)
 - Geometry worker: [`../section_geometry/README.md`](../section_geometry/README.md)
-- Midline / void emit: [`../section_geometry/interface/README.md`](../section_geometry/interface/README.md)
+- Midline / void emit: [`../section_geometry/midlines/README.md`](../section_geometry/midlines/README.md) · [`../section_geometry/topology/README.md`](../section_geometry/topology/README.md) · [`../section_geometry/cell_wall_loops/README.md`](../section_geometry/cell_wall_loops/README.md)
 - Mesh worker: [`../../mesh_utilities/section_mesh/README.md`](../../mesh_utilities/section_mesh/README.md)
 - Bind worker: [`../../material_utilities/section_bind/README.md`](../../material_utilities/section_bind/README.md)
 - Loads worker: [`../../load_utilities/section_loads/README.md`](../../load_utilities/section_loads/README.md)
