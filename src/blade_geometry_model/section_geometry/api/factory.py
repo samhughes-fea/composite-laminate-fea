@@ -7,6 +7,9 @@ from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_ali
     resolve_spar_cap_thickness,
     resolve_twist_rad,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.layout.section_layout import (
+    SectionLayout,
+)
 from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
     SYSTEM_TYPE_KEYS,
     SystemLayoutSpec,
@@ -22,13 +25,15 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sections.from
     multicell_from_layout,
 )
 
+LayoutInput = SystemLayoutSpec | SectionLayout
+
 # Nominal skin thickness passed to section views (pre-clamp).
 _DEFAULT_SECTION_SKIN_THICKNESS_M = 0.003
 
 
 def build_section_view(
     airfoil_sdf: AirfoilSDF,
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     *,
     twist_rad: float | None = None,
     twist_angle_rad: float | None = None,
@@ -41,7 +46,8 @@ def build_section_view(
 ) -> SectionMidlineHost:
     """Return a section object usable by :class:`SectionPropertiesReport`.
 
-    Always assembles via :class:`MultiCellSection` for every catalogue key
+    Accepts catalogue :class:`SystemLayoutSpec` or parametric
+    :class:`SectionLayout`. Always assembles via :class:`MultiCellSection`
     (including zero-web ``0A`` / ``0B``). Same host path as
     :func:`build_section_with_thicknesses`.
 

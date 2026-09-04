@@ -1,4 +1,4 @@
-﻿"""Generate high-quality feature fly-through GIFs for section geometry."""
+"""Generate high-quality feature fly-through GIFs for section geometry."""
 
 from __future__ import annotations
 

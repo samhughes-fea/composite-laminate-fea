@@ -1,4 +1,4 @@
-"""Recipe-faithful constructive polygons for laminate subcomponents."""
+"""Recipe-faithful constructive polygons for wall-solid subcomponents."""
 
 from __future__ import annotations
 
@@ -8,16 +8,22 @@ import numpy as np
 from shapely.geometry import MultiPolygon, Polygon
 
 from .helpers import (
-    airfoil_polygon,
-    chordwise_bay_clip,
-    chordwise_box,
     ensure_polygon,
-    flapwise_bay_clip,
-    half_plane_clip,
-    offset_polygon_inward,
     rotate_geom,
     stadium_polygon,
 )
+from .offset_locus import airfoil_polygon, offset_polygon_inward
+
+
+def _clip_algebra():
+    from ..sections.clip_algebra import (
+        CamberSide,
+        ChordBand,
+        FlapwiseStrip,
+        apply_shapely,
+    )
+
+    return CamberSide, ChordBand, FlapwiseStrip, apply_shapely
 
 
 def _af_from_component(comp: Any):
@@ -64,11 +70,12 @@ def emit_outer_skin_polygon(
     else:
         return annulus
     camber_xy = getattr(comp, "_camber_xy", None)
-    if camber_xy is not None and np.asarray(camber_xy).shape[0] >= 2:
-        return ensure_polygon(
-            _camber_clip(annulus, camber_xy, surface=surface), allow_empty=True
-        )
-    return half_plane_clip(annulus, surface=surface)
+    CamberSide, _ChordBand, _FlapwiseStrip, apply_shapely = _clip_algebra()
+    return apply_shapely(
+        CamberSide(surface=surface),  # type: ignore[arg-type]
+        annulus,
+        camber_xy=camber_xy,
+    )
 
 
 def emit_shear_web_polygon(
@@ -148,11 +155,13 @@ def emit_spar_cap_polygon(
     if inner.is_empty:
         raise ValueError("SparCap: inner-skin offset is empty.")
     slab = inner if deeper.is_empty else inner.difference(deeper)
+    CamberSide, ChordBand, FlapwiseStrip, apply_shapely = _clip_algebra()
     camber_xy = getattr(comp, "_camber_xy", None)
-    if camber_xy is not None and np.asarray(camber_xy).shape[0] >= 2:
-        slab = _camber_clip(slab, camber_xy, surface=surface)
-    else:
-        slab = half_plane_clip(slab, surface=surface)
+    slab = apply_shapely(
+        CamberSide(surface=surface),  # type: ignore[arg-type]
+        slab,
+        camber_xy=camber_xy,
+    )
     if slab.is_empty:
         # The side clip consumed the whole band: this cap has no material on
         # this surface. Both clip branches below build their clip region from
@@ -173,20 +182,24 @@ def emit_spar_cap_polygon(
                 "Construct it via spar_family (which supplies them) or pass them "
                 "explicitly."
             )
-        bay = flapwise_bay_clip(
+        mode = str(getattr(comp, "flapwise_clip_mode", "strip") or "strip")
+        slab = apply_shapely(
+            FlapwiseStrip(
+                nx=float(comp.flapwise_nx),
+                ny=float(comp.flapwise_ny),
+                c_lo=comp.flapwise_c_lo,
+                c_hi=comp.flapwise_c_hi,
+                clip_mode=mode,  # type: ignore[arg-type]
+            ),
             slab,
-            nx=float(comp.flapwise_nx),
-            ny=float(comp.flapwise_ny),
-            clip_mode=str(comp.flapwise_clip_mode),
-            c_lo=comp.flapwise_c_lo,
-            c_hi=comp.flapwise_c_hi,
         )
-        slab = slab.intersection(bay)
         if slab.is_empty:
             return Polygon()
     else:
-        box = chordwise_box(slab, float(comp.x_start), float(comp.x_end))
-        slab = slab.intersection(box)
+        slab = apply_shapely(
+            ChordBand(x_start=float(comp.x_start), x_end=float(comp.x_end)),
+            slab,
+        )
 
     twist = float(getattr(comp, "twist_angle", 0.0) or 0.0)
     if abs(twist) > 1e-10:
@@ -211,13 +224,13 @@ def emit_inner_cavity_polygon(
 
 def emit_sandwich_core_polygon(
     comp: Any,
-    laminate_exclusion_union: Polygon | MultiPolygon | None,
+    wall_exclusion_union: Polygon | MultiPolygon | None,
     *,
     cavity: Polygon | MultiPolygon | None = None,
 ) -> Polygon | MultiPolygon:
-    """Core bay: (inner cavity − laminates) ∩ bay clip.
+    """Core bay: (inner cavity − wall solids) ∩ bay clip.
 
-    Matches SDF ``SandwichCore``: Offset(airfoil,-skin/2) minus laminate
+    Matches SDF ``SandwichCore``: Offset(airfoil,-skin/2) minus wall-solid
     exclusions, then chordwise or flapwise bay clip.
     """
     af = _af_from_component(comp)
@@ -226,42 +239,118 @@ def emit_sandwich_core_polygon(
         cavity = emit_inner_cavity_polygon(af, skin_t)
 
     region = cavity
-    if laminate_exclusion_union is not None and not laminate_exclusion_union.is_empty:
-        region = region.difference(laminate_exclusion_union)
+    if wall_exclusion_union is not None and not wall_exclusion_union.is_empty:
+        region = region.difference(wall_exclusion_union)
 
     bay_mode = getattr(comp, "bay_mode", "chordwise")
+    _CamberSide, ChordBand, FlapwiseStrip, apply_shapely = _clip_algebra()
+    target = region if not region.is_empty else cavity
     if bay_mode == "flapwise":
-        clip = flapwise_bay_clip(
-            region if not region.is_empty else cavity,
-            nx=float(comp.flapwise_nx),
-            ny=float(comp.flapwise_ny),
-            clip_mode=str(comp.flapwise_clip_mode),
-            c_lo=comp.flapwise_c_lo,
-            c_hi=comp.flapwise_c_hi,
+        clipped = apply_shapely(
+            FlapwiseStrip(
+                nx=float(comp.flapwise_nx),
+                ny=float(comp.flapwise_ny),
+                c_lo=comp.flapwise_c_lo,
+                c_hi=comp.flapwise_c_hi,
+                clip_mode=str(comp.flapwise_clip_mode or "strip"),  # type: ignore[arg-type]
+            ),
+            target,
         )
     else:
-        clip = chordwise_bay_clip(
-            region if not region.is_empty else cavity,
-            x_start=comp.x_start,
-            x_end=comp.x_end,
-        )
-        # Optional y half-planes if present
+        x_start = comp.x_start
+        x_end = comp.x_end
+        # Open ends: omit chord clip when both bounds are None.
+        if x_start is None and x_end is None:
+            clipped = target
+        else:
+            clipped = apply_shapely(
+                ChordBand(
+                    x_start=float(x_start) if x_start is not None else -1e9,
+                    x_end=float(x_end) if x_end is not None else 1e9,
+                ),
+                target,
+            )
         if getattr(comp, "y_min", None) is not None or getattr(comp, "y_max", None) is not None:
-            minx, miny, maxx, maxy = clip.bounds
+            if clipped.is_empty:
+                return Polygon()
+            minx, miny, maxx, maxy = clipped.bounds
             pad = max(maxx - minx, maxy - miny, 1.0) + 1.0
             y0 = float(comp.y_min) if comp.y_min is not None else miny - pad
             y1 = float(comp.y_max) if comp.y_max is not None else maxy + pad
             ybox = Polygon(
                 [(minx - pad, y0), (maxx + pad, y0), (maxx + pad, y1), (minx - pad, y1)]
             )
-            clip = clip.intersection(ybox)
+            clipped = clipped.intersection(ybox)
 
-    if region.is_empty:
-        return Polygon()
-    clipped = region.intersection(clip)
     if clipped.is_empty or float(getattr(clipped, "area", 0.0) or 0.0) <= 0.0:
         return Polygon()
     return ensure_polygon(clipped, allow_empty=True)
+
+
+def emit_trailing_edge_insert_polygon(
+    comp: Any,
+    *,
+    airfoil_poly: Polygon | MultiPolygon | None = None,
+    inner_cavity: Polygon | MultiPolygon | None = None,
+) -> Polygon | MultiPolygon:
+    """TE insert: Offset(airfoil, -skin) ∩ {x >= x_start}."""
+    af = _af_from_component(comp)
+    skin_t = float(comp.skin_thickness)
+    x_start = float(comp.x_start)
+    cavity = (
+        inner_cavity
+        if inner_cavity is not None
+        else emit_inner_cavity_polygon(af, skin_t, airfoil_poly=airfoil_poly)
+    )
+    if cavity.is_empty:
+        return Polygon()
+    # Half-plane x >= x_start via ChordBand from x_start to far TE.
+    _CamberSide, ChordBand, _FlapwiseStrip, apply_shapely = _clip_algebra()
+    minx, miny, maxx, maxy = cavity.bounds
+    pad = max(maxx - minx, maxy - miny, 1.0) + 1.0
+    region = apply_shapely(
+        ChordBand(x_start=x_start, x_end=maxx + pad),
+        cavity,
+    )
+    return ensure_polygon(region, allow_empty=True)
+
+
+def emit_leading_edge_insert_polygon(
+    comp: Any,
+    *,
+    airfoil_poly: Polygon | MultiPolygon | None = None,
+    inner_cavity: Polygon | MultiPolygon | None = None,
+) -> Polygon | MultiPolygon:
+    """LE insert: Offset(airfoil, -skin) ∩ {x <= x_end} ∩ Circle(le, r)."""
+    from shapely.geometry import Point
+
+    af = _af_from_component(comp)
+    skin_t = float(comp.skin_thickness)
+    x_end = float(comp.x_end)
+    cavity = (
+        inner_cavity
+        if inner_cavity is not None
+        else emit_inner_cavity_polygon(af, skin_t, airfoil_poly=airfoil_poly)
+    )
+    if cavity.is_empty:
+        return Polygon()
+    _CamberSide, ChordBand, _FlapwiseStrip, apply_shapely = _clip_algebra()
+    minx, miny, maxx, maxy = cavity.bounds
+    pad = max(maxx - minx, maxy - miny, 1.0) + 1.0
+    region = apply_shapely(
+        ChordBand(x_start=minx - pad, x_end=x_end),
+        cavity,
+    )
+    # Circle clip matches IR Circle(cx, cy, r).
+    le_x = float(getattr(comp, "le_x", 0.0) or 0.0)
+    le_y = float(getattr(comp, "le_y", 0.0) or 0.0)
+    # LEInsert stores radius only via IR; recover from x_end default if absent.
+    radius = getattr(comp, "radius", None)
+    if radius is None:
+        radius = x_end
+    disk = Point(le_x, le_y).buffer(float(radius), quad_segs=32)
+    region = region.intersection(disk)
+    return ensure_polygon(region, allow_empty=True)
 
 
 def emit_component_polygon(comp: Any) -> Polygon | MultiPolygon:
@@ -280,8 +369,18 @@ def emit_component_polygon(comp: Any) -> Polygon | MultiPolygon:
         return emit_shear_web_polygon(comp)
     if name == "SparCap" or hasattr(comp, "cap_height"):
         return emit_spar_cap_polygon(comp)
+    if name == "TEInsert" or (
+        hasattr(comp, "x_start") and hasattr(comp, "skin_thickness") and name.endswith("Insert")
+        and "TE" in name
+    ):
+        return emit_trailing_edge_insert_polygon(comp)
+    if name == "LEInsert" or (
+        hasattr(comp, "x_end") and hasattr(comp, "skin_thickness") and name.endswith("Insert")
+        and "LE" in name
+    ):
+        return emit_leading_edge_insert_polygon(comp)
     if name == "SandwichCore" or hasattr(comp, "bay_mode"):
         raise TypeError(
-            "SandwichCore requires emit_sandwich_core_polygon with laminate exclusions."
+            "SandwichCore requires emit_sandwich_core_polygon with wall-solid exclusions."
         )
     raise TypeError(f"No constructive polygon emitter for {name}.")

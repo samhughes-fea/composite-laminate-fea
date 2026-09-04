@@ -31,8 +31,10 @@ class SectionGeometryRunner:
     Parameters
     ----------
     layout:
-        Nominal ``SystemLayoutSpec`` requested for this station. The *effective*
-        layout may step down if the local cavity cannot anchor every web.
+        Nominal catalogue ``SystemLayoutSpec`` or parametric ``SectionLayout``
+        requested for this station. The *effective* layout may step down if the
+        local cavity cannot anchor every web (catalogue rung, or keyless
+        ``N`` webs + ``CapPlacementRule``).
     airfoil:
         Station ``AirfoilSDF``.
     skin_thickness, spar_cap_thickness, shear_web_thickness:
@@ -76,7 +78,7 @@ class SectionGeometryRunner:
     ) -> None:
         from .kwarg_aliases import (
             resolve_shear_web_thickness,
-            resolve_skin_thickness,
+            resolve_skin_gauges,
             resolve_spar_cap_thickness,
             resolve_twist_rad,
         )
@@ -87,9 +89,10 @@ class SectionGeometryRunner:
             raise ValueError("airfoil is required")
         self._layout = layout
         self._airfoil = airfoil
-        self._t_skin = resolve_skin_thickness(
+        self._t_skin_gauges = resolve_skin_gauges(
             skin_thickness=skin_thickness, required=True
         )
+        self._t_skin = max(self._t_skin_gauges)
         self._t_spar = resolve_spar_cap_thickness(
             spar_cap_thickness=spar_cap_thickness,
             default=0.0,
@@ -171,7 +174,7 @@ class SectionGeometryRunner:
         self._result = build_section_geometry(
             resolution.layout,
             self._airfoil,
-            skin_thickness=self._t_skin,
+            skin_thickness=self._t_skin_gauges,
             spar_cap_thickness=self._t_spar,
             shear_web_thickness=self._t_web,
             twist_rad=self._twist_rad,

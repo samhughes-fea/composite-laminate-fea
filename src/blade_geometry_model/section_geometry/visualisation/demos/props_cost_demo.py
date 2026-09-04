@@ -5,7 +5,7 @@ Section-property backends: wall time vs accuracy (Pareto).
 
 For a canonical 2D-CN NACA 2412 section (0° and 15° twist), times:
 
-* hybrid (constructive laminates + residual QT)
+* hybrid (constructive wall solids + residual QT)
 * full-label quadtree at depths 5..8
 * dense uniform grid (reference accuracy / cost ceiling)
 
@@ -129,7 +129,7 @@ def _run_case(
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
-    # Constructive-only reference for laminate labels (hybrid without residual cost).
+    # Constructive-only reference for wall-solid labels (hybrid without residual cost).
     t0 = time.perf_counter()
     polys = emit_constructive_polygons(section)
     constr = section_properties_from_polygons(polys)
@@ -534,10 +534,10 @@ def main(argv: list[str] | None = None) -> Path:
         "airfoil": "NACA 2412",
         "layout": "twin_web family D (2D-CN class)",
         "track_labels": list(_TRACK),
-        "reference": "constructive laminate polygons (shoelace)",
+        "reference": "constructive wall-solid polygons (shoelace)",
         "rows": all_rows,
         "notes": (
-            "Hybrid = constructive laminates + residual QT for inserts/cores path. "
+            "Hybrid = constructive wall solids + residual QT for inserts/cores path. "
             "Area error is mean relative |dA|/A over track labels vs constructive. "
             "At non-zero twist, full-label QT can under-resolve vs constructive "
             "(supports/refinement); hybrid remains the production path."

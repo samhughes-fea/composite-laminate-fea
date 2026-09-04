@@ -5,14 +5,15 @@ deeper than the local cavity, a skin that closes the section, a web with no
 inner-skin intercept. Those must be *scored* as failed trials so the search backs
 off, not raised through the station worker.
 
-This used to be decided by substring-matching the exception message in
-``optimize.py``, which meant any newly-worded or newly-added infeasibility became
-a crash. These tests pin the type instead.
+This used to be decided by substring-matching the exception message in a BSP
+optimize module, which meant any newly-worded or newly-added infeasibility became
+a crash. These tests pin the type instead. BSP sizing absorption is covered in
+``blade_structure_precompute.module.section_selection`` (station sizing workflow);
+this package only owns the geometry oracles.
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from blade_structure_utilities.geometry_utilities.section_contract import (
@@ -27,7 +28,7 @@ def test_is_a_valueerror_subclass() -> None:
 
 def test_offset_ring_deeper_than_the_section_is_infeasible() -> None:
     """The direct oracle: no locus exists at a depth past the inscribed limit."""
-    from blade_structure_utilities.geometry_utilities.section_geometry.constructive.helpers import (
+    from blade_structure_utilities.geometry_utilities.section_geometry.constructive.offset_locus import (
         airfoil_offset_ring,
     )
     from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import (
@@ -50,7 +51,7 @@ def test_bad_depth_argument_is_not_infeasibility() -> None:
     Keeping these distinct is the point: the sizing loop must not swallow real
     programming errors as failed trials.
     """
-    from blade_structure_utilities.geometry_utilities.section_geometry.constructive.helpers import (
+    from blade_structure_utilities.geometry_utilities.section_geometry.constructive.offset_locus import (
         airfoil_offset_ring,
     )
     from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import (
@@ -76,73 +77,3 @@ def test_web_anchors_and_skin_intercepts_are_infeasibility() -> None:
     # A skin thicker than the local half-thickness leaves no inner cavity.
     with pytest.raises(InfeasibleSectionGeometry):
         inner_y_at_x(af, 0.4, 0.95)
-
-
-def test_sizing_loop_catches_infeasibility_by_type() -> None:
-    """``optimize.py`` must no longer decide this by reading the message."""
-    import inspect
-
-    from blade_structure_precompute.module.section_selection.processing.shell_station import (
-        optimize,
-    )
-
-    src = inspect.getsource(optimize)
-    assert "except InfeasibleSectionGeometry" in src
-    for stale in ("inner skin intercept", "no feasible web anchor"):
-        assert stale not in src, (
-            f"optimize.py still string-matches {stale!r}; the type check was "
-            "meant to replace it"
-        )
-
-
-def _sizing_call(exc: Exception):
-    """Drive ``size_station_against_ei`` with a geometry that always raises."""
-    from unittest.mock import MagicMock, patch
-
-    from blade_structure_precompute.module.section_selection.processing.shell_station.optimize import (
-        size_station_against_ei,
-    )
-
-    t = np.linspace(0.0, 2.0 * np.pi, 60, endpoint=False)
-    coords = np.column_stack([0.03 * np.sin(t), 0.5 + 0.5 * np.cos(t)])
-    system = MagicMock()
-    system.STRUCTURAL_SYSTEM_KEY = "SystemType2D-CN"
-    system.n_cells = 3
-    system.structural_family = "D"
-    system.web_orientation = "chord_normal"
-
-    def _always_raises(**_kwargs):
-        raise exc
-
-    with patch(
-        "blade_structure_precompute.module.section_selection.processing"
-        ".shell_station.optimize.evaluate_station",
-        side_effect=_always_raises,
-    ):
-        return size_station_against_ei(
-            system=system,
-            station_idx=0,
-            zL=0.5,
-            coords=coords,
-            metadata={"chord": 1.0, "twist_deg": 0.0},
-            EI_req=1.0e9,
-        )
-
-
-def test_infeasible_geometry_is_a_failed_trial_not_a_crash() -> None:
-    """Sizing must absorb infeasibility so the search can back off."""
-    bin_obj, _ = _sizing_call(
-        InfeasibleSectionGeometry("cap deeper than the local cavity")
-    )
-    assert bin_obj is not None
-
-
-def test_a_real_bug_still_propagates() -> None:
-    """The discrimination is the point: a plain ValueError must not be swallowed.
-
-    Without this, the handler would quietly turn genuine defects into
-    "this station is just infeasible" and the search would wander.
-    """
-    with pytest.raises(ValueError) as exc:
-        _sizing_call(ValueError("some genuine defect"))
-    assert not isinstance(exc.value, InfeasibleSectionGeometry)

@@ -1,4 +1,11 @@
-"""Shapely helpers for constructive laminate polygons."""
+"""Shapely helpers for constructive wall-solid polygons.
+
+Offset APIs (``offset_polygon_inward``, ``airfoil_offset_ring``,
+``airfoil_polygon``) are **private implementation** of
+:mod:`offset_locus`. Production code must import those names from
+``offset_locus``, not from this module (enforced by
+``tests/test_offset_import_boundary.py``).
+"""
 
 from __future__ import annotations
 

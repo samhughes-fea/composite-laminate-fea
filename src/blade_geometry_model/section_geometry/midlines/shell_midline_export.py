@@ -18,15 +18,14 @@ cares about a canonical ordering (e.g. ``skin → caps → webs`` as required by
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
 
 from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import ShellMidlineStrip
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.section_midline_host import (
-    CapShellComponentLike,
     SectionMidlineHost,
-    ShellComponentLike,
     SkinShellComponentLike,
     WebShellComponentLike,
 )
@@ -133,11 +132,8 @@ def build_shell_midline_strips(
 
     try:
         components_S = section.components_unrotated
-    except AttributeError as exc:
-        raise ValueError(
-            "section must expose public 'components_unrotated' "
-            "(SectionMidlineHost). Expected MultiCellSection."
-        ) from exc
+    except AttributeError:
+        components_S = {}
 
     if chord_m is None:
         airfoil = getattr(section, "airfoil", None)
@@ -157,6 +153,7 @@ def build_shell_midline_strips(
             mid_zero_twist_pitch_axis_station_frame, twist_rad, chord_m, f_pivot
         )
 
+    # Web before skin: webs also satisfy SkinShellComponentLike (thickness + midline).
     def _label_key(label: object) -> str:
         """Stable string id; prefer Enum.value over ``ComponentLabel.NAME`` repr."""
         value = getattr(label, "value", None)
@@ -166,60 +163,103 @@ def build_shell_midline_strips(
 
     strips: list[ShellMidlineStrip] = []
 
-    # Web before skin: webs also satisfy SkinShellComponentLike (thickness + midline).
-    for label, comp in components_S.items():
-        if isinstance(comp, WebShellComponentLike):
-            mid_S = comp.midline_polyline(n=n_web_samples)
+    recipes = dict(getattr(section, "wall_recipes", None) or {})
+    cap_recipes = dict(getattr(section, "spar_cap_wall_recipes", None) or {})
+    airfoil = getattr(section, "airfoil", None)
+    if airfoil is None:
+        raise ValueError("section must expose airfoil for recipe midline projection.")
+
+    def _is_web_key(key: str) -> bool:
+        return key.startswith("shear_web_") or key.startswith("web_")
+
+    def _is_skin_key(key: str) -> bool:
+        return (
+            key == "outer_skin"
+            or key.startswith("skin_suction_surface")
+            or key.startswith("skin_pressure_surface")
+            or key in {"skin_suction_surface", "skin_pressure_surface"}
+        )
+
+    def _is_cap_key(key: str) -> bool:
+        return key.startswith("spar_cap")
+
+    # Prefer recipe map; fall back to component iteration only for thickness
+    # when a host lacks wall_recipes (should not happen for MultiCellSection).
+    skin_web_items: list[tuple[str, Any, str]] = []
+    for key, wall in recipes.items():
+        if _is_web_key(key):
+            skin_web_items.append((key, wall, "web"))
+        elif _is_skin_key(key):
+            skin_web_items.append((key, wall, "skin"))
+
+    if not skin_web_items:
+        for label, comp in components_S.items():
+            key = _label_key(label)
+            if isinstance(comp, WebShellComponentLike):
+                skin_web_items.append((key, None, "web"))
+            elif isinstance(comp, SkinShellComponentLike):
+                skin_web_items.append((key, None, "skin"))
+
+    # Web before skin (legacy strip order; webs also look skin-like by attrs).
+    skin_web_items.sort(key=lambda item: 0 if item[2] == "web" else 1)
+
+    for key, wall, kind in skin_web_items:
+        if wall is None:
+            raise KeyError(
+                f"No {kind} wall recipe for {key!r}; "
+                "MultiCellSection must author recipes at assemble."
+            )
+        if kind == "web":
+            mid_S = wall.to_midline(airfoil, n=n_web_samples)
             strips.append(
                 ShellMidlineStrip(
-                    label=_label_key(label),
+                    label=key,
                     kind="web",
                     midline_twisted_pitch_axis_blade_frame=_to_twisted_pitch_axis_blade_frame(mid_S),
-                    thickness_m=float(comp.thickness),
+                    thickness_m=float(wall.thickness),
                     closed=False,
-                    alignment=str(comp.alignment),
+                    alignment=str(wall.alignment),
                 )
             )
-        elif isinstance(comp, SkinShellComponentLike):
-            mid_S = comp.midline_polyline()
-            # The label already says which side this is (skin_suction_surface /
-            # skin_pressure_surface), so tag it here rather than leaving
-            # `_ensure_ss_ps_skins` to infer it a stage later. Its inference
-            # falls back to a mean-y heuristic when the label yields nothing,
-            # and that heuristic is what would misclassify a strongly cambered
-            # or twisted section; setting the side at source means the emit
-            # path never reaches it.
-            side = _skin_side_from_label(label)
+        else:
+            mid_S = wall.to_midline(airfoil)
+            side = _skin_side_from_label(key)
             strips.append(
                 ShellMidlineStrip(
-                    label=_label_key(label),
+                    label=key,
                     kind="skin",
                     midline_twisted_pitch_axis_blade_frame=_to_twisted_pitch_axis_blade_frame(mid_S),
-                    thickness_m=float(comp.thickness),
-                    # A suction/pressure-surface half-ring is an open arc; only an
-                    # undivided skin is a closed ring. This was previously `True`
-                    # for both, which `_ensure_ss_ps_skins` corrected downstream.
+                    thickness_m=float(wall.thickness),
                     closed=side is None,
                     skin_side=side,
                 )
             )
 
+    cap_items: list[tuple[str, Any]] = []
     try:
-        cap_components = section.spar_cap_components_unrotated
+        cap_components = dict(section.spar_cap_components_unrotated or {})
     except AttributeError:
         cap_components = {}
-    for label, comp in (cap_components or {}).items():
-        if not isinstance(comp, CapShellComponentLike):
-            continue
-        mid_S = comp.midline_polyline(n=n_cap_samples)
+    for label in cap_components:
+        key = _label_key(label)
+        wall = cap_recipes.get(key) or recipes.get(key)
+        if wall is None:
+            raise KeyError(
+                f"No cap wall recipe for {key!r}; "
+                "MultiCellSection must author CapWall recipes at assemble."
+            )
+        cap_items.append((key, wall))
+
+    for key, wall in cap_items:
+        mid_S = wall.to_midline(airfoil, n=n_cap_samples)
         strips.append(
             ShellMidlineStrip(
-                label=_label_key(label),
+                label=key,
                 kind="cap",
                 midline_twisted_pitch_axis_blade_frame=_to_twisted_pitch_axis_blade_frame(mid_S),
-                thickness_m=float(comp.cap_height),
+                thickness_m=float(wall.cap_height),
                 closed=False,
-                surface=str(comp.surface),
+                surface=str(wall.surface),
             )
         )
 

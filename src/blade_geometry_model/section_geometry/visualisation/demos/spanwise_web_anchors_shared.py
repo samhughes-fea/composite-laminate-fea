@@ -1,4 +1,4 @@
-﻿"""Shared spanwise station loader for section-geometry demos."""
+"""Shared spanwise station loader for section-geometry demos."""
 
 from __future__ import annotations
 

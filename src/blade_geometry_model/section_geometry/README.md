@@ -180,16 +180,19 @@ Ownership across the spine is summarised in
 ## Architecture
 
 Every catalogue key builds `MultiCellSection` (N ≥ 0 webs), including `0A` /
-`0B` and all `*A`–`*D` keys. Layout ids stay in `SYSTEM_TYPE_KEYS`; the old
-`OuterSkinOnlySection` host was retired.
+`0B` and all `*A`–`*D` keys. Layout ids stay in `SYSTEM_TYPE_KEYS` as **named
+presets**; assemble SoT is parametric `SectionLayout` + `CapPlacementRule`.
+Walls are frozen recipes with three projections (SDF / polygon / midline).
+Internal ownership matrix:
+[`docs/reference/G_ROW_OWNERSHIP_MATRIX.md`](docs/reference/G_ROW_OWNERSHIP_MATRIX.md).
 
 ```mermaid
 flowchart TB
   Api[api] --> Layout[layout]
-  Api --> Sdf[sdf]
   Api --> Sections[sections]
   Layout --> Sections
-  Sdf --> Sections
+  Recipes[recipes] --> Sections
+  Sdf[sdf] --> Recipes
   Sections --> Constructive[constructive]
   Sections --> Mid[midlines]
   Mid --> Topo[topology]
@@ -207,9 +210,9 @@ flowchart TB
   Runner[SectionGeometryRunner] --> Build[build_section_geometry]
   Build --> Resolve[resolve_station_layout]
   Resolve --> Sized[build_section_with_thicknesses]
-  Spec[SystemLayoutSpec] --> Sized
+  SL[SectionLayout] --> Sized
   Sized --> MCS[MultiCellSection]
-  Comps[components] --> MCS
+  Recipes[wall_recipes] --> MCS
   MCS --> Mid[midlines]
   Mid --> Topo[topology]
   Topo --> CellWall[cell_wall_loops]
@@ -220,8 +223,8 @@ flowchart TB
 
 | Extend | How |
 |--------|-----|
-| New layout id | Register in [`layout/system_layout.py`](layout/system_layout.py) |
-| New cap/web recipe | [`sections/components/`](sections/components/README.md) + assemble in `MultiCellSection` |
+| New layout id | Register in [`layout/system_layout.py`](layout/system_layout.py) as a `SectionLayout` preset |
+| New cap/web recipe | [`recipes/`](recipes/README.md) + assemble in `MultiCellSection` |
 | New optional product | Gate in `normalize_output_gates` + field on `SectionGeometryResult` + home module |
 | Shape primitives | [`sdf/`](sdf/README.md) (recipe-agnostic) |
 
@@ -278,8 +281,9 @@ the twisted blade frame). Compare
 | `"cell_wall_loops"` | midlines fields + `cell_wall_loops` |
 
 Midlines are always junction-prepared before attach. Strip order is not a bind
-contract. Layouts `0A` / `0B` may emit skin/cap midlines but are not a supported
-shell-mesh handoff (no web junctions).
+contract. Layouts `0A` / `0B` emit skin/cap midlines for shell mesh without web
+junctions; see
+[`docs/reference/ADR_ZERO_WEB_SHELL_MESH.md`](docs/reference/ADR_ZERO_WEB_SHELL_MESH.md).
 
 ### Coordinates
 
@@ -301,9 +305,10 @@ midlines. Detail: [`coordinate_frames`](../coordinate_frames/README.md) ·
 section_geometry/
 ├── api/            # runner and build entrypoints
 ├── types/          # public type aliases
-├── layout/         # layout id → SystemLayoutSpec
+├── layout/         # layout id → SystemLayoutSpec / SectionLayout
 ├── sdf/            # SDF primitives and AirfoilSDF
 ├── sections/       # MultiCellSection assembly
+├── recipes/        # dual-emission wall recipes (SDF / polygon / midline)
 ├── constructive/   # polygons for area / inertia
 ├── props_emit/     # gated properties_map
 ├── midlines/       # centreline strip emit
@@ -317,17 +322,16 @@ section_geometry/
 |--------|------|
 | [`api/`](api/README.md) | Public lifecycle: resolve, build, return `SectionGeometryResult` |
 | [`types/`](types/README.md) | Stable aliases for result types |
-| [`layout/`](layout/README.md) | Catalogue ids and spanwise web-drop rules |
+| [`layout/`](layout/README.md) | Catalogue ids, parametric `SectionLayout`, web-drop rules |
 | [`sdf/`](sdf/README.md) | Domain-agnostic shape kernel |
 | [`sections/`](sections/README.md) | Blade recipes → `MultiCellSection` ([components](sections/components/README.md)) |
+| [`recipes/`](recipes/README.md) | One wall description → SDF / polygon / midline projections |
 | [`constructive/`](constructive/README.md) | Polygon path for mature regions |
 | [`props_emit/`](props_emit/README.md) | Orchestrates `properties_map` |
 | [`midlines/`](midlines/README.md) | Wall → centreline polyline |
 | [`topology/`](topology/README.md) | Snap strip endpoints for meshing |
 | [`cell_wall_loops/`](cell_wall_loops/README.md) | Closed loops around empty cells |
 | [`visualisation/`](visualisation/README.md) | Plotting and demos |
-
-Compat directories `engine/`, `core/`, and `interface/` are re-export shims only.
 
 ## Public API
 
@@ -472,7 +476,7 @@ This is per-region 2-D geometry, not beam `EA` / `EI` / `GJ`
   |--------|--------|
   | All layout families | `visualisation/demos/structural_family_grids_demo.py` |
   | Junction snap | `visualisation/demos/shell_junction_topology_demo.py` |
-  | Cell-wall loops | `visualisation/demos/void_cell_wall_loops_demo.py` |
+  | Cell-wall loops | `visualisation/demos/cell_wall_loops_demo.py` |
   | Polygon vs SDF area | `visualisation/demos/dual_rep_consistency_demo.py` |
   | Twin-web walkthrough | `visualisation/demos/naca2412_section.py` |
 

@@ -22,7 +22,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.csg impor
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.grid import SDFGrid
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.primitives import sdf_box, sdf_circle
 from blade_structure_utilities.geometry_utilities.section_geometry import AirfoilSDF
-from blade_structure_utilities.geometry_utilities.section_geometry.sections import (
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir import (
     LEInsert,
     OuterSkin,
     SandwichCore,

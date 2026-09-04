@@ -52,7 +52,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.visualisation
     plot_section_hybrid,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
-    emit_laminate_polygons,
+    emit_wall_solid_polygons,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.plot_section import (
     apply_structural_section_axes,
@@ -80,7 +80,7 @@ _WALL_SIDE = {
     "spar_cap_pressure_surface": ("Spar cap — pressure", "down"),
 }
 
-# The bays between the walls. emit_laminate_polygons returns laminates only, and
+# The bays between the walls. emit_wall_solid_polygons returns wall solids only, and
 # the sandwich_core_* regions overlap rather than partitioning the cavity, so the
 # cells are located from the resolved web stations instead.
 _CELL_NAMES = ("Leading-edge cell", "Box cell (between webs)", "Trailing-edge cell")
@@ -152,7 +152,7 @@ def _draw_annotated(section, airfoil, web_x_m, *, twist_rad: float, out_dir: Pat
                     presentation: bool) -> Path:
     """The section with its parts named on the drawing, plus the datums."""
     chord = float(airfoil.chord)
-    polygons = emit_laminate_polygons(section)
+    polygons = emit_wall_solid_polygons(section)
 
     fig, ax = plt.subplots(figsize=_FIGSIZE_ANNOTATED)
 

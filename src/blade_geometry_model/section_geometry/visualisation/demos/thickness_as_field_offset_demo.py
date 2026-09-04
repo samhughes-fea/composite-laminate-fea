@@ -64,7 +64,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import
     eval_expr_batch,
     union_expr,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.sections.clips import (
+from blade_structure_utilities.geometry_utilities.section_geometry.sections.clip_algebra import (
     airfoil_expr,
 )
 
@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
         [row["skin_area_m2"] * 1e4 for row in sweep_rows],
         marker="o",
         color="#2f6f9f",
-        label="skin laminate",
+        label="skin wall",
     )
     axis_area.plot(
         thickness_mm,

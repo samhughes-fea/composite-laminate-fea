@@ -22,7 +22,7 @@ class ShellComponentLike(Protocol):
 
 @runtime_checkable
 class SkinShellComponentLike(Protocol):
-    """Outer-skin solid: closed midline + laminate thickness."""
+    """Outer-skin solid: closed midline + wall thickness."""
 
     thickness: float
 

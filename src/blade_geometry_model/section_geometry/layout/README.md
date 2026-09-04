@@ -27,6 +27,8 @@ whose local cavity is too shallow are **dropped**, not slid.
 |------|------|
 | `system_layout.py` | `SystemLayoutSpec`, registry, resolve, cascade |
 | `structural.py` | Cap-family and fixed-cap-anchor parsers |
+| `cap_placement.py` | `CapPlacementRule` — declarative cap policy |
+| `section_layout.py` | Parametric `SectionLayout` facade |
 | `section_axes.py` | Pitching-axis and max-thickness helpers |
 | `thickness_limits.py` | Minimum cavity-depth hints |
 | `types.py` | `SDFCallable` protocol |
@@ -41,6 +43,23 @@ whose local cavity is too shallow are **dropped**, not slid.
 | `effective_layout_for_web_count` | `system_layout.py` | Surviving webs → catalogue rung |
 | `step_down_cascade` | `system_layout.py` | Ordered drop ladder |
 | `StructuralFamily` | `structural.py` | Cap family `"A"`…`"D"` |
+| `CapPlacementRule` | `cap_placement.py` | Cap kind / anchor / half-width |
+| `SectionLayout` | `section_layout.py` | Parametric web + orientation + caps |
+
+### `SectionLayout` / `CapPlacementRule`
+
+`SectionLayout.from_catalogue_key` builds a parametric view of a catalogue
+entry: web chord fractions, orientation, and a `CapPlacementRule` derived from
+the structural family (`none` / `fixed_band` / `per_web_pads` /
+`continuous_box`). Zero-web family-B stations fold the catalogue half-band
+fraction into `CapPlacementRule.half_width` before `build_spar_caps`.
+Catalogue keys are presets; `multicell_from_section_layout` /
+`multicell_from_layout(SectionLayout, …)` assemble without requiring a key.
+`SectionGeometryRunner` / `build_section_geometry` /
+`resolve_station_layout` accept the same `SectionLayout`: keyless drop is
+``N`` surviving webs + `CapPlacementRule` (continuous box demotes when
+``N < 2``); keyed layouts still use the catalogue cascade.
+`SystemLayoutSpec` remains the registry source of truth for named presets.
 
 ### `SystemLayoutSpec` fields
 

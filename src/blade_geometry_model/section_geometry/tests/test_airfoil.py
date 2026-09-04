@@ -10,7 +10,10 @@ import tempfile
 import os
 
 from blade_structure_utilities.geometry_utilities.section_geometry import AirfoilSDF
-from blade_structure_utilities.geometry_utilities.section_geometry.sdf.naca import airfoil_vertices_from_spanwise
+from blade_structure_utilities.geometry_utilities.section_geometry.sdf.naca import (
+    airfoil_vertices_from_spanwise,
+    naca_five_digit_vertices,
+)
 
 
 @pytest.fixture
@@ -155,3 +158,13 @@ class TestInputValidation:
                 AirfoilSDF.from_dat(path)
         finally:
             os.unlink(path)
+
+
+class TestNACAFiveDigitReflex:
+    def test_reflex_vertices_finite_and_differ_from_simple(self):
+        simple = naca_five_digit_vertices(2, 30, 12, 120, 1.0, reflex=False)
+        reflexed = naca_five_digit_vertices(2, 30, 12, 120, 1.0, reflex=True)
+        assert np.isfinite(reflexed).all()
+        assert reflexed.shape == simple.shape
+        assert not np.allclose(simple, reflexed)
+

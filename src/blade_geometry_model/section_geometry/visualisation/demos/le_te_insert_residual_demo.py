@@ -4,7 +4,7 @@ visualisation/demos/le_te_insert_residual_demo.py
 Demonstrate LE/TE inserts as first-class residual-φ consumers.
 
 Builds a twin-web NACA 2412 section with ``leading_edge_insert_x_m`` / ``trailing_edge_insert_x_m``,
-then plots constructive laminates + residual inserts (hybrid / quadtree).
+then plots constructive wall solids + residual inserts (hybrid / quadtree).
 
 Writes:
 
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> Path:
         mesh,
         labels=residual or list(mesh.phi_by_label.keys()),
         section=section,
-        title="Hybrid geometry (constructive laminates + residual LE/TE inserts)",
+        title="Hybrid geometry (constructive wall solids + residual LE/TE inserts)",
         mesh_title="Residual quadtree phi path for LE/TE inserts",
         figsize=(16.0, 5.5),
         alpha=0.5,
@@ -240,7 +240,7 @@ def main(argv: list[str] | None = None) -> Path:
         ),
         "skin_thickness_m": _SKIN_T,
         "notes": (
-            "Dual-rep model: laminates/cores use constructive polygons; "
+            "Dual-rep model: wall solids/cores use constructive polygons; "
             "leading_edge_insert/trailing_edge_insert stay on the shared adaptive quadtree over phi. "
             "Insert cavity envelope is Offset(airfoil, -skin_thickness), flush with the "
             "inner-skin / core interface (not the skin mid-surface at -t/2)."

@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> Path:
 
     # --- 2. Skin mid-surface vs aero tip ---
     # Full closed mid-ring for TE-gap demo (union of SS/PS open half-rings).
-    from blade_structure_utilities.geometry_utilities.section_geometry.sections.components.outer_skin import (
+    from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.outer_skin import (
         OuterSkin,
     )
 
@@ -436,7 +436,7 @@ def main(argv: list[str] | None = None) -> Path:
         "leading_edge_twisted_pitch_axis_blade_frame": [float(le_b[0]), float(le_b[1])],
         "trailing_edge_twisted_pitch_axis_blade_frame": [float(te_b[0]), float(te_b[1])],
         "notes": {
-            "hybrid_te": "plot_section_hybrid uses constructive laminate polygons; TE tip is not mesh-limited.",
+            "hybrid_te": "plot_section_hybrid uses constructive wall-solid polygons; TE tip is not mesh-limited.",
             "skin_midline": (
                 "OuterSkin.midline_polyline ends short of the aero tip where local "
                 "thickness < t — avoids a zero-area TE spur."

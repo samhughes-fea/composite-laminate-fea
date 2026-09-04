@@ -40,6 +40,7 @@ flowchart TB
   Guides --> Anatomy[anatomy_on_a_figure]
   Guides --> Feas[feasibility_and_drops]
   Guides --> Handoff[geometry_to_mesh]
+  Reference --> GMatrix[G_ROW_OWNERSHIP_MATRIX]
   Reference --> Taxonomy[system_type_xyz_taxonomy]
   Reference --> Gallery[structural_systems_gallery]
   Reports --> DualRep[DUAL_REP_ACCEPTANCE]
@@ -77,8 +78,10 @@ Runnable teaching scripts (not plot demos):
 
 | Doc | Contents |
 |-----|----------|
+| [`reference/G_ROW_OWNERSHIP_MATRIX.md`](reference/G_ROW_OWNERSHIP_MATRIX.md) | Internal G-row ownership matrix (PHASE7A analogue) |
 | [`reference/system_type_xyz_taxonomy.md`](reference/system_type_xyz_taxonomy.md) | Layout-id decode (`"2D-F"` → web count, cap family, orientation) |
 | [`reference/structural_systems_gallery.md`](reference/structural_systems_gallery.md) | All 40 `SYSTEM_TYPE_KEYS` with demo figures |
+| [`reference/ADR_ZERO_WEB_SHELL_MESH.md`](reference/ADR_ZERO_WEB_SHELL_MESH.md) | `0A`/`0B` shell-mesh handoff (N = 0 strips) |
 
 ## Reports
 
@@ -99,6 +102,7 @@ Runnable teaching scripts (not plot demos):
 | [`../sdf/`](../sdf/README.md) | Shape kernel |
 | [`../sections/`](../sections/README.md) | `MultiCellSection` |
 | [`../sections/components/`](../sections/components/README.md) | Skin / web / cap / core recipes |
+| [`../recipes/`](../recipes/README.md) | Dual-emission wall recipes |
 | [`../constructive/`](../constructive/README.md) | Polygons for area |
 | [`../props_emit/`](../props_emit/README.md) | `properties_map` |
 | [`../midlines/`](../midlines/README.md) | Centreline strips |

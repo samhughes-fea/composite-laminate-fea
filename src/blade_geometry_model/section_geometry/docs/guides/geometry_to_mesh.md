@@ -45,8 +45,10 @@ result = SectionGeometryRunner(
 ).execute().get_results()
 ```
 
-Layouts `"0A"` / `"0B"` do not support shell-mesh handoff
-([`feasibility_and_drops.md`](feasibility_and_drops.md#zero-web-keys)).
+Layouts `"0A"` / `"0B"` are valid shell-mesh stations (skin ± caps; no web
+junctions). See
+[`ADR_ZERO_WEB_SHELL_MESH.md`](../reference/ADR_ZERO_WEB_SHELL_MESH.md) and
+[`feasibility_and_drops.md`](feasibility_and_drops.md#zero-web-keys).
 
 ---
 

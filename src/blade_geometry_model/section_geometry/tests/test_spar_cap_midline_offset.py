@@ -90,10 +90,10 @@ def test_cap_midline_is_at_normal_offset_depth(airfoil_key: str, layout_key: str
 @pytest.mark.parametrize("layout_key", LAYOUTS)
 def test_cap_midline_lies_inside_the_cap_slab(airfoil_key: str, layout_key: str) -> None:
     """Clip-independent form of the same claim: inside the unclipped slab."""
-    from blade_structure_utilities.geometry_utilities.section_geometry.sections.clips import (
+    from blade_structure_utilities.geometry_utilities.section_geometry.sections.clip_algebra import (
         airfoil_expr,
     )
-    from blade_structure_utilities.geometry_utilities.section_geometry.sections.components.base import (
+    from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.base import (
         expr_callable,
     )
     from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import Offset, Slab

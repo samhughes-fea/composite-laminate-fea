@@ -43,6 +43,18 @@ _NACA5_RMK1: NDArray[np.float64] = np.array(
     dtype=np.float64,
 )
 
+# Published NACA 5-digit reflex (S=1) camber parameters for Cli=0.3
+# (Abbott & von Doenhoff / NASA TM 4741): columns [p, r, k1, k2/k1].
+_NACA5_REFLEX: NDArray[np.float64] = np.array(
+    [
+        [0.10, 0.1300, 51.990, 0.000764],
+        [0.15, 0.2170, 15.793, 0.006770],
+        [0.20, 0.3180, 6.520, 0.030300],
+        [0.25, 0.4410, 3.191, 0.135500],
+    ],
+    dtype=np.float64,
+)
+
 
 def _thickness_yt_4digit(xc, t_frac, *, closed_te):
     # Classic Abbott coefficients: closed TE → yt(1)=0 uses a4=-0.1036;
@@ -102,23 +114,92 @@ def _interp_naca5_table(r):
     return float(np.interp(r, rr, _NACA5_RMK1[:, 1])), float(np.interp(r, rr, _NACA5_RMK1[:, 2]))
 
 
+def _interp_naca5_reflex(p):
+    """Return (r, k1, k2/k1) for design max-camber location ``p`` (Cli=0.3 table)."""
+    p = float(np.clip(p, _NACA5_REFLEX[0, 0], _NACA5_REFLEX[-1, 0]))
+    pp = _NACA5_REFLEX[:, 0]
+    r = float(np.interp(p, pp, _NACA5_REFLEX[:, 1]))
+    k1 = float(np.interp(p, pp, _NACA5_REFLEX[:, 2]))
+    k2_over_k1 = float(np.interp(p, pp, _NACA5_REFLEX[:, 3]))
+    return r, k1, k2_over_k1
+
+
+def _reflex_k2_over_k1(r, p):
+    """Closed-form k2/k1 from join ``r`` and max-camber station ``p``."""
+    r = float(r)
+    p = float(p)
+    denom = (1.0 - r) ** 3
+    if abs(denom) < 1e-18:
+        raise ValueError("Reflex camber join r too close to trailing edge.")
+    return (3.0 * (r - p) ** 2 - r**3) / denom
+
+
 def naca_five_digit_vertices(L, PQ, TT, n_points, chord, *, closed_te=True, reflex=False):
-    """NACA five-digit LPQTT simple camber (S=0)."""
-    if reflex:
-        raise NotImplementedError("NACA five-digit reflex (S=1) camber is not implemented.")
+    """NACA five-digit LPQTT camber (S=0 simple, S=1 reflex)."""
     if L < 1 or L > 9:
         raise ValueError(f"Five-digit L must be 1..9, got {L}.")
     if PQ < 0 or PQ > 99:
         raise ValueError(f"Five-digit PQ must be 0..99, got {PQ}.")
     if TT < 1 or TT > 99:
         raise ValueError(f"Five-digit TT must be 1..99, got {TT}.")
-    r = float(PQ) / 200.0
-    m_tab, k1 = _interp_naca5_table(r)
     cli = (3.0 / 20.0) * float(L)
     lift_scale = cli / 0.3
     beta = np.linspace(0.0, math.pi, max(4, n_points // 2 + 1), dtype=np.float64)
     xc = 0.5 * (1.0 - np.cos(beta))
     yt = _thickness_yt_4digit(xc, float(TT) / 100.0, closed_te=closed_te)
+
+    if reflex:
+        # PQ encodes 10*P (+ optional S digit ignored when reflex=True).
+        p_design = float(int(PQ) // 10) / 20.0
+        if p_design <= 0.0:
+            p_design = float(PQ) / 200.0
+        r, k1_tab, k2_ratio = _interp_naca5_reflex(p_design)
+        # Prefer tabulated k2/k1; fall back to closed form if needed.
+        if not np.isfinite(k2_ratio):
+            k2_ratio = _reflex_k2_over_k1(r, p_design)
+        k1 = k1_tab * lift_scale
+        yc = np.zeros_like(xc)
+        dyc = np.zeros_like(xc)
+        mask0 = xc <= r
+        # Standard reflex camber (NASA TM 4741 / Abbott & von Doenhoff).
+        yc = np.where(
+            mask0,
+            (k1 / 6.0)
+            * (
+                (xc - r) ** 3
+                - k2_ratio * (1.0 - r) ** 3 * xc
+                - r**3 * xc
+                + r**3
+            ),
+            yc,
+        )
+        yc = np.where(
+            ~mask0,
+            (k1 / 6.0)
+            * (
+                k2_ratio * (xc - r) ** 3
+                - k2_ratio * (1.0 - r) ** 3 * xc
+                - r**3 * xc
+                + r**3
+            ),
+            yc,
+        )
+        dyc = np.where(
+            mask0,
+            (k1 / 6.0)
+            * (3.0 * (xc - r) ** 2 - k2_ratio * (1.0 - r) ** 3 - r**3),
+            dyc,
+        )
+        dyc = np.where(
+            ~mask0,
+            (k1 / 6.0)
+            * (3.0 * k2_ratio * (xc - r) ** 2 - k2_ratio * (1.0 - r) ** 3 - r**3),
+            dyc,
+        )
+        return _wrap_upper_lower(xc, yc, dyc, yt, float(chord))
+
+    r = float(PQ) / 200.0
+    m_tab, k1 = _interp_naca5_table(r)
     yc = np.zeros_like(xc)
     dyc = np.zeros_like(xc)
     mask0 = xc <= r

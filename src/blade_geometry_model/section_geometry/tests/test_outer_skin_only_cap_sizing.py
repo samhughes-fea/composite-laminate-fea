@@ -50,8 +50,8 @@ def _cap_area(chord: float, spar_cap_thickness: float) -> float:
 
 
 def test_cap_area_responds_to_t_spar():
-    """spar_cap_thickness must size the 0B band (above the MultiCell spar laminate floor)."""
-    # MultiCell clamps spar laminate to >= 5 mm; sample above that floor.
+    """spar_cap_thickness must size the 0B band (above the MultiCell spar wall thickness floor)."""
+    # MultiCell clamps spar wall thickness to >= 5 mm; sample above that floor.
     areas = [_cap_area(ROOT_CHORD, t) for t in (0.0055, 0.007, 0.0085)]
 
     assert all(b > a for a, b in zip(areas, areas[1:])), areas

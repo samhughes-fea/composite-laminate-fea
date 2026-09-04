@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import (
     ShellMidlineStrip,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.sections.components.outer_skin import (
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.outer_skin import (
     split_closed_ring_ss_ps,
 )
 
@@ -177,10 +177,24 @@ def _classify_side_arcs(
     out: list[ShellMidlineStrip] = []
     bay_i = 0
     for i, (_s0, _s1, arc) in enumerate(segs):
-        # Suction is TE→LE (index 0 = TE); pressure is LE→TE (index 0 = LE).
+        # Zero-web: a single half-ring is a full side arc, not an LE tip panel.
         if n == 1:
-            skin_arc, bay_index = _LEADING, None
-        elif i == 0:
+            label = root
+            out.append(
+                ShellMidlineStrip(
+                    label=label,
+                    kind="skin",
+                    midline_twisted_pitch_axis_blade_frame=arc,
+                    thickness_m=float(thickness_m),
+                    closed=False,
+                    skin_side=side,
+                    skin_arc=None,
+                    bay_index=None,
+                )
+            )
+            continue
+        # Suction is TE→LE (index 0 = TE); pressure is LE→TE (index 0 = LE).
+        if i == 0:
             skin_arc, bay_index = (
                 (_TRAILING, None) if side == _SUCTION else (_LEADING, None)
             )

@@ -1,4 +1,4 @@
-﻿"""Scenario and profile definitions for section-geometry fly-throughs."""
+"""Scenario and profile definitions for section-geometry fly-throughs."""
 
 from __future__ import annotations
 

@@ -3,13 +3,13 @@ visualisation/demos/dual_rep_consistency_demo.py
 =====================================
 Computational-geometry demo: constructive vs residual-φ consistency.
 
-Hybrid properties use constructive laminate polygons for skin/web/cap and
+Hybrid properties use constructive wall-solid polygons for skin/web/cap and
 residual φ (adaptive quadtree) for LE/TE inserts. This demo overlays both
 boundaries and reports measurable gap / area metrics.
 
 Writes:
 
-* ``dual_rep_boundary_overlay.png`` — constructive exterior vs φ=0 for laminates
+* ``dual_rep_boundary_overlay.png`` — constructive exterior vs φ=0 for wall solids
 * ``dual_rep_residual_inserts.png`` — insert φ heatmaps + constructive skin
 * ``dual_rep_consistency.json`` — max/mean gaps and area deltas
 
@@ -47,7 +47,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry import (
     SDFGrid,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
-    emit_laminate_polygons,
+    emit_wall_solid_polygons,
     is_residual_label,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.props_backend import (
@@ -170,7 +170,7 @@ def main(argv: list[str] | None = None) -> Path:
     af = AirfoilSDF.from_naca("2412", chord=1.0, n_points=140)
     section = _build_section(af)
     grid = SDFGrid.from_airfoil(af, padding=0.06, nx=480, ny=220)
-    polys = emit_laminate_polygons(section)
+    polys = emit_wall_solid_polygons(section)
 
     fig, axes = plt.subplots(2, 2, figsize=(12.0, 8.0))
     metrics: dict[str, dict] = {}
@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> Path:
         section,
         residual_mesh=mesh,
         ax=axes2[0],
-        title="Hybrid: constructive laminates + residual inserts",
+        title="Hybrid: constructive wall solids + residual inserts",
         show_legend=True,
     )
     # Inner-skin reference (insert flush interface).
@@ -348,7 +348,7 @@ def main(argv: list[str] | None = None) -> Path:
         "airfoil": "NACA 2412",
         "chord_m": 1.0,
         "skin_thickness_m": _SKIN_T,
-        "laminate_boundary_metrics": metrics,
+        "wall_solid_boundary_metrics": metrics,
         "max_boundary_gap_m": max_gap,
         "residual_areas_hybrid_m2": residual_areas,
         "hybrid_meta_keys": sorted(meta.keys()),
@@ -358,7 +358,7 @@ def main(argv: list[str] | None = None) -> Path:
             if is_residual_label(str(getattr(k, "value", k)))
         ],
         "notes": (
-            "Constructive laminate boundaries and dense-grid φ=0 agree to a "
+            "Constructive wall-solid boundaries and dense-grid φ=0 agree to a "
             "measurable gap; inserts are residual-φ only on the hybrid mesh."
         ),
     }

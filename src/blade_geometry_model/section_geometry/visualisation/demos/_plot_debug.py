@@ -1,4 +1,4 @@
-﻿"""Matplotlib debug tracing helpers for section-geometry demo scripts."""
+"""Matplotlib debug tracing helpers for section-geometry demo scripts."""
 
 from __future__ import annotations
 

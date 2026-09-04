@@ -1,7 +1,7 @@
 """
 visualisation/demos/geometry_from_design_vector.py
 =======================================
-Build and plot 2-D section **computational geometry** from laminate thicknesses
+Build and plot 2-D section **computational geometry** from wall thicknesses
 and layout only — no structural / aerodynamic solves.
 
 Design-like inputs (all lengths in metres unless noted):
@@ -55,11 +55,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--naca", default="2412", help="4-digit NACA code (default 2412).")
     p.add_argument("--chord", type=float, default=1.0, help="Chord length [m].")
-    p.add_argument("--skin-thickness", type=float, default=0.003, help="Skin laminate thickness [m].")
+    p.add_argument("--skin-thickness", type=float, default=0.003, help="Skin wall thickness [m].")
     p.add_argument(
         "--web-thickness",
         default="0.004",
-        help="Web laminate thickness [m]: one value or comma-separated per web.",
+        help="Web wall thickness [m]: one value or comma-separated per web.",
     )
     p.add_argument(
         "--web-x-fracs",
@@ -126,8 +126,6 @@ def main(argv: list[str] | None = None) -> int:
         AirfoilSDF,
         MultiCellSection,
         SDFGrid,
-    )
-    from blade_structure_utilities.geometry_utilities.section_geometry.interface import (
         export_section_json,
         plot_section,
     )

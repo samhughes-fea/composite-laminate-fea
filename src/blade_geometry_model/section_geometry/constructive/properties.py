@@ -1,4 +1,4 @@
-"""Shoelace section properties from constructive laminate polygons."""
+"""Shoelace section properties from constructive wall-solid polygons."""
 
 from __future__ import annotations
 

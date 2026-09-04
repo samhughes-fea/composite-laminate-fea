@@ -22,7 +22,9 @@ should use the prepared form.
 | File | Role |
 |------|------|
 | `shell_strip_topology.py` | Main snap / panelise pass |
-| `cap_web_junctions.py` | Cap–web T-junction insert |
+| `cap_web_junctions.py` | Cap–web T-junction insert (axis × final cap) |
+| `../midlines/junction_primitives.py` | Shared axis × offset-ring oracle; production web feet use it |
+| `../midlines/cap_skin_ray_resample.py` | Cap ray resample; preserves pre-resample junction seeds |
 
 ## API
 

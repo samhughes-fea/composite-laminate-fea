@@ -76,10 +76,11 @@ Important keyword arguments on `SectionGeometryRunner` /
 | `airfoil_for_spec` | Aerofoil used to size the quadtree domain; pass the **twisted** outline so the AABB does not clip rotated tips |
 | `props_backend` | `"hybrid"` / `"quadtree"` / `"grid"` (default from env) |
 | `quadtree_spec` | Optional QT refinement settings |
-| `retain_mesh` | Keep the quadtree mesh on the result when true |
+| `retain_mesh` | **G-PROPS debug only** — keep hybrid/quadtree occupancy mesh on the result. Not a `section_mesh` product |
 
-Layouts `"0A"` / `"0B"`: valid zero-web hosts; shell-mesh handoff unsupported
-(package README Optional outputs).
+Layouts `"0A"` / `"0B"`: valid zero-web hosts; shell-mesh handoff accepts
+skin ± optional caps (no web junctions) — see
+[`ADR_ZERO_WEB_SHELL_MESH.md`](../docs/reference/ADR_ZERO_WEB_SHELL_MESH.md).
 
 ## Errors and feasibility
 

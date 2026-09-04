@@ -66,12 +66,12 @@ def _compute_hybrid(
     constructive_labels, residual_labels = classify_property_labels(labels)
     meta_extra: dict[str, Any] = {
         "constructive_labels": list(constructive_labels),
-        "laminate_labels": [k for k in constructive_labels if not k.startswith("core")],
+        "wall_solid_labels": [k for k in constructive_labels if not k.startswith("core")],
         "residual_labels": list(residual_labels),
         "residual_maturity": {
-            "core": "constructive polygon path (cavity - laminates + bay clip)",
-            "leading_edge_insert": "residual phi; geometry less mature than core",
-            "trailing_edge_insert": "residual phi; geometry less mature than core",
+            "core": "constructive polygon path (cavity - wall solids + bay clip)",
+            "leading_edge_insert": "constructive polygon path (default)",
+            "trailing_edge_insert": "constructive polygon path (default)",
         },
     }
 

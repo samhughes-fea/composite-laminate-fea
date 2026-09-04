@@ -33,7 +33,7 @@ Run these first (from the repository root):
 2. [`structural_family_grids_demo.py`](structural_family_grids_demo.py) ? all 40 layout keys
 3. [`anatomy_2d_f_demo.py`](anatomy_2d_f_demo.py) ? labelled `2D-F` anatomy
 4. [`shell_junction_topology_demo.py`](shell_junction_topology_demo.py) ? junction snap
-5. [`void_cell_wall_loops_demo.py`](void_cell_wall_loops_demo.py) ? cell-wall loops
+5. [`cell_wall_loops_demo.py`](cell_wall_loops_demo.py) ? cell-wall loops
 
 Checked-in gallery:
 [`../../docs/reference/structural_systems_gallery.md`](../../docs/reference/structural_systems_gallery.md).
@@ -52,14 +52,14 @@ Section / gallery / junctions / cell walls / anatomy.
 |--------|----------------|
 | [`naca2412_section.py`](naca2412_section.py) | Twin-web section and twisted box examples ? `output/naca2412_section/` |
 | [`geometry_from_design_vector.py`](geometry_from_design_vector.py) | Build/plot from thicknesses + layout (families A?D) |
-| [`structural_family_grids_demo.py`](structural_family_grids_demo.py) | One PNG per layout id ? `../output/structural_family_grids/` |
+| [`structural_family_grids_demo.py`](structural_family_grids_demo.py) | One PNG per layout id; `--wall` contact sheet ? `../output/structural_family_grids/` |
 | [`anatomy_2d_f_demo.py`](anatomy_2d_f_demo.py) | Labelled `2D-F` with legend ? `../output/anatomy_2d_f/` |
 | [`section_centerline_geometry_taxonomy.py`](section_centerline_geometry_taxonomy.py) | Per-label SDF panels for layout keys |
 | [`system_types_twist_grid.py`](system_types_twist_grid.py) | Layout grids at fixed twist |
 | [`spanwise_web_anchors.py`](spanwise_web_anchors.py) | Root-anchored vs per-station web positions |
 | [`skin_ss_ps_taxonomy_demo.py`](skin_ss_ps_taxonomy_demo.py) | Upper/lower skin solids and midline arcs |
 | [`shell_junction_topology_demo.py`](shell_junction_topology_demo.py) | Junction snap before/after (raw vs prepared midlines) |
-| [`void_cell_wall_loops_demo.py`](void_cell_wall_loops_demo.py) | Closed cell loops for 0?5 webs |
+| [`cell_wall_loops_demo.py`](cell_wall_loops_demo.py) | Closed cell loops for 0?5 webs |
 | [`section_properties_dashboard.py`](section_properties_dashboard.py) | Per-label area / inertia dashboard |
 | [`feature_flythroughs.py`](feature_flythroughs.py) | Reusable GIF fly-through pipeline |
 | [`design_vector_morph.py`](design_vector_morph.py) | One design vector -> solids, midlines and Q4 mesh, animated |
@@ -72,6 +72,9 @@ Section / gallery / junctions / cell walls / anatomy.
 | Script | What it draws |
 |--------|----------------|
 | [`sg009_axis_cap_junction_spike.py`](sg009_axis_cap_junction_spike.py) | SG-009 offline: axis ? cap oracle vs production shared nodes |
+| [`csg_tree_diff_demo.py`](csg_tree_diff_demo.py) | Diff two CSG trees for one region label |
+| [`feasibility_cascade_demo.py`](feasibility_cascade_demo.py) | Chord-shrink resolve ladder: drop / step-down / raise |
+| [`bug_log_sg009_demo.py`](bug_log_sg009_demo.py) | SG-009 tangency schematic (crossing then shared node) |
 | [`dual_rep_consistency_demo.py`](dual_rep_consistency_demo.py) | Polygon boundary vs SDF contour |
 | [`le_te_exactness_demo.py`](le_te_exactness_demo.py) | Skin midline vs aerofoil tip |
 | [`le_te_insert_residual_demo.py`](le_te_insert_residual_demo.py) | LE/TE inserts on the SDF path |
@@ -127,7 +130,7 @@ raises fonts/DPI.
 | [`constructive_vs_quadtree_spike.py`](constructive_vs_quadtree_spike.py) | Console comparison (stdout) |
 | [`_ensure_repo_path.py`](_ensure_repo_path.py) | Put repo root on `sys.path` |
 | [`_taxonomy_cases.py`](_taxonomy_cases.py) | Shared twist/aerofoil helpers |
-| [`void_cell_wall_loops_case_payload.py`](void_cell_wall_loops_case_payload.py) | JSON payload helper |
+| [`cell_wall_loops_case_payload.py`](cell_wall_loops_case_payload.py) | JSON payload helper |
 | [`_plot_debug.py`](_plot_debug.py) | Optional Matplotlib call tracing |
 
 Mesh strip demos live under

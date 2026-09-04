@@ -1,4 +1,4 @@
-﻿"""Shared rendering helpers for section-geometry fly-through GIFs."""
+"""Shared rendering helpers for section-geometry fly-through GIFs."""
 
 from __future__ import annotations
 

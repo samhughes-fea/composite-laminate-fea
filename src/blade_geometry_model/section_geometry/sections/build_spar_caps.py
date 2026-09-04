@@ -1,26 +1,40 @@
-"""Build upper/lower spar caps for structural families A/B/C/D."""
+"""Build spar-cap wall recipes and SDF projections from CapPlacementRule.
+
+Assemble authors frozen :class:`CapWall` recipes (G-RECIPE SoT), then projects
+to SDF IR. Web-subtract remains an SDF-only post-step and is not encoded on
+the recipe parameters.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
-from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import Expr, Subtract, union_expr
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+    CapWall,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import (
+    Expr,
+    Subtract,
+    union_expr,
+)
 
-from .cap_feasibility import cap_feasibility_clamp
-from .clips import _parallel_web_strip_clip, web_station_projection
-from .components.spar_cap import SparCap
+from ..layout.cap_placement import CapPlacementRule
 from ..layout.section_axes import max_thickness_chord_x, pitch_axis_x_from_le
+from .cap_feasibility import cap_feasibility_clamp
+from .clip_algebra import _parallel_web_strip_clip, web_station_projection
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.spar_cap import (
+    SparCap,
+)
 from .labels import ComponentLabel
 from .web_layout import inner_y_at_x, inner_y_at_xs
 
 
-def _flapwise_strip_params(nx, ny, c_lo, c_hi) -> dict[str, Any]:
-    """Kwargs mirroring a ``_parallel_web_strip_clip`` for the Shapely emitter.
+def _label_str(label: Any) -> str:
+    return str(getattr(label, "value", label))
 
-    The IR path consumes the callable; the polygon path needs the parameters so
-    it can clip the cap solid with :func:`flapwise_bay_clip` rather than infer
-    the clip from the midline's chordwise extent.
-    """
+
+def _flapwise_strip_params(nx, ny, c_lo, c_hi) -> dict[str, Any]:
+    """Kwargs mirroring a ``_parallel_web_strip_clip`` for the Shapely emitter."""
     return {
         "flapwise_nx": float(nx),
         "flapwise_ny": float(ny),
@@ -54,8 +68,49 @@ def _wrap_expr_cap(base_cap: SparCap, expr: Expr) -> SparCap:
     return out
 
 
+def _cap_wall(
+    *,
+    skin_thickness: float,
+    x_start: float,
+    x_end: float,
+    cap_height: float,
+    surface: str,
+    twist_angle: float = 0.0,
+    fw: dict[str, Any] | None = None,
+) -> CapWall:
+    fw = fw or {}
+    return CapWall(
+        skin_thickness=float(skin_thickness),
+        x_start=float(x_start),
+        x_end=float(x_end),
+        cap_height=float(cap_height),
+        surface=str(surface),
+        twist_angle=float(twist_angle),
+        flapwise_nx=fw.get("flapwise_nx"),
+        flapwise_ny=fw.get("flapwise_ny"),
+        flapwise_c_lo=fw.get("flapwise_c_lo"),
+        flapwise_c_hi=fw.get("flapwise_c_hi"),
+        flapwise_clip_mode=fw.get("flapwise_clip_mode"),
+    )
+
+
+def _project_cap(
+    wall: CapWall,
+    airfoil_sdf,
+    *,
+    airfoil_expr_node,
+    camber_xy=None,
+    strip_clip=None,
+) -> SparCap:
+    cap = wall.to_sdf_component(
+        airfoil_sdf, camber_xy=camber_xy, airfoil_expr_node=airfoil_expr_node
+    )
+    if strip_clip is not None:
+        cap._strip_clip = strip_clip
+    return cap
+
+
 def build_spar_caps(
-    sf: str,
     airfoil_sdf,
     skin_thickness,
     xs,
@@ -64,38 +119,55 @@ def build_spar_caps(
     cap_h_lower,
     web_components,
     *,
+    cap_placement: CapPlacementRule,
     airfoil_expr_node,
     all_flapwise: bool,
     c_station,
     nx,
     ny,
     N: int,
-    f_anchor,
     pitch_fr: float,
     fhw: float,
     dhw: float,
     y_search,
     phi_inner_ref,
-) -> tuple[Any | None, Any | None, dict[str, Any]]:
-    """Return (cap_upper, cap_lower, unrotated_spar_cap_components)."""
+) -> tuple[Any | None, Any | None, dict[str, Any], dict[str, CapWall]]:
+    """Return (cap_upper, cap_lower, unrotated_SparCap, CapWall recipes).
+
+    CapWall recipes are authored first from :class:`CapPlacementRule`; SDF
+    components are projections. Family letters are not accepted here.
+    """
+    rule = cap_placement
+
+    if rule.kind == "none":
+        return None, None, {}, {}
+
     web_exprs = [w.expr for w in web_components]
     web_union = union_expr(web_exprs) if web_exprs else None
     unrotated: dict[str, Any] = {}
+    recipes: dict[str, CapWall] = {}
     cap_upper = cap_lower = None
 
-    if sf == "D":
+    if rule.kind == "continuous_box":
+        if N < 1:
+            raise ValueError(
+                "continuous_box cap placement requires at least one web "
+                f"(got N={N})."
+            )
         x_cap_start = xs[0]
         x_cap_end = xs[-1]
-        x_cap_start, x_cap_end, cap_h_upper, cap_h_lower, _clamp_info = cap_feasibility_clamp(
-            airfoil_sdf,
-            skin_thickness,
-            x_cap_start,
-            x_cap_end,
-            cap_h_upper,
-            cap_h_lower,
-            y_search=y_search,
-            phi_inner_ref=phi_inner_ref,
-            aft_half_depth_rule=True,
+        x_cap_start, x_cap_end, cap_h_upper, cap_h_lower, _clamp_info = (
+            cap_feasibility_clamp(
+                airfoil_sdf,
+                skin_thickness,
+                x_cap_start,
+                x_cap_end,
+                cap_h_upper,
+                cap_h_lower,
+                y_search=y_search,
+                phi_inner_ref=phi_inner_ref,
+                aft_half_depth_rule=True,
+            )
         )
         cap_strip = None
         cap_fw: dict[str, Any] = {}
@@ -122,44 +194,52 @@ def build_spar_caps(
                 cap_strip = _parallel_web_strip_clip(nx, ny, c_lo_cap, c_hi_cap)
                 cap_fw = _flapwise_strip_params(nx, ny, c_lo_cap, c_hi_cap)
         _camber = _clamp_info.get("camber_xy")
-        cap_upper = SparCap(
-            airfoil_sdf,
-            skin_thickness,
-            x_cap_start,
-            x_cap_end,
-            cap_h_upper,
-            "suction_surface",
-            strip_clip=cap_strip,
-            airfoil_expr_node=airfoil_expr_node,
-            camber_xy=_camber,
-            **cap_fw,
+        wall_u = _cap_wall(
+            skin_thickness=skin_thickness,
+            x_start=x_cap_start,
+            x_end=x_cap_end,
+            cap_height=cap_h_upper,
+            surface="suction_surface",
+            fw=cap_fw,
         )
-        cap_lower = SparCap(
+        wall_l = _cap_wall(
+            skin_thickness=skin_thickness,
+            x_start=x_cap_start,
+            x_end=x_cap_end,
+            cap_height=cap_h_lower,
+            surface="pressure_surface",
+            fw=cap_fw,
+        )
+        recipes[_label_str(ComponentLabel.SPAR_CAP_SUCTION_SURFACE)] = wall_u
+        recipes[_label_str(ComponentLabel.SPAR_CAP_PRESSURE_SURFACE)] = wall_l
+        cap_upper = _project_cap(
+            wall_u,
             airfoil_sdf,
-            skin_thickness,
-            x_cap_start,
-            x_cap_end,
-            cap_h_lower,
-            "pressure_surface",
-            strip_clip=cap_strip,
             airfoil_expr_node=airfoil_expr_node,
             camber_xy=_camber,
-            **cap_fw,
+            strip_clip=cap_strip,
+        )
+        cap_lower = _project_cap(
+            wall_l,
+            airfoil_sdf,
+            airfoil_expr_node=airfoil_expr_node,
+            camber_xy=_camber,
+            strip_clip=cap_strip,
         )
         unrotated[ComponentLabel.SPAR_CAP_SUCTION_SURFACE] = cap_upper
         unrotated[ComponentLabel.SPAR_CAP_PRESSURE_SURFACE] = cap_lower
         if web_union is not None:
             cap_upper = _wrap_expr_cap(cap_upper, Subtract(cap_upper.expr, web_union))
             cap_lower = _wrap_expr_cap(cap_lower, Subtract(cap_lower.expr, web_union))
-    elif sf == "B":
-        if f_anchor == "pitching":
+    elif rule.kind == "fixed_band":
+        anchor = rule.anchor or "max_thickness"
+        half = float(rule.half_width) if rule.half_width is not None else float(fhw)
+        if anchor == "pitching":
             x_c = pitch_axis_x_from_le(airfoil_sdf, pitch_fr)
         else:
             x_c = max_thickness_chord_x(airfoil_sdf)
-        x_lo = x_c - fhw
-        x_hi = x_c + fhw
-        # Family B is a single continuous band, but unlike D it has no aft web
-        # to key a half-depth rule on, so it uses the extent/scale path.
+        x_lo = x_c - half
+        x_hi = x_c + half
         x_lo, x_hi, cap_h_upper, cap_h_lower, _clamp_b = cap_feasibility_clamp(
             airfoil_sdf,
             skin_thickness,
@@ -187,40 +267,49 @@ def build_spar_caps(
             c_hi = web_station_projection(nx, ny, x_hi, cy_c)
             strip_b = _parallel_web_strip_clip(nx, ny, c_lo, c_hi)
             strip_b_fw = _flapwise_strip_params(nx, ny, c_lo, c_hi)
-        cap_upper = SparCap(
-            airfoil_sdf,
-            skin_thickness,
-            x_lo,
-            x_hi,
-            cap_h_upper,
-            "suction_surface",
-            strip_clip=strip_b,
-            airfoil_expr_node=airfoil_expr_node,
-            camber_xy=_camber_b,
-            **strip_b_fw,
+        wall_u = _cap_wall(
+            skin_thickness=skin_thickness,
+            x_start=x_lo,
+            x_end=x_hi,
+            cap_height=cap_h_upper,
+            surface="suction_surface",
+            fw=strip_b_fw,
         )
-        cap_lower = SparCap(
+        wall_l = _cap_wall(
+            skin_thickness=skin_thickness,
+            x_start=x_lo,
+            x_end=x_hi,
+            cap_height=cap_h_lower,
+            surface="pressure_surface",
+            fw=strip_b_fw,
+        )
+        recipes[_label_str(ComponentLabel.SPAR_CAP_SUCTION_SURFACE)] = wall_u
+        recipes[_label_str(ComponentLabel.SPAR_CAP_PRESSURE_SURFACE)] = wall_l
+        cap_upper = _project_cap(
+            wall_u,
             airfoil_sdf,
-            skin_thickness,
-            x_lo,
-            x_hi,
-            cap_h_lower,
-            "pressure_surface",
-            strip_clip=strip_b,
             airfoil_expr_node=airfoil_expr_node,
             camber_xy=_camber_b,
-            **strip_b_fw,
+            strip_clip=strip_b,
+        )
+        cap_lower = _project_cap(
+            wall_l,
+            airfoil_sdf,
+            airfoil_expr_node=airfoil_expr_node,
+            camber_xy=_camber_b,
+            strip_clip=strip_b,
         )
         unrotated[ComponentLabel.SPAR_CAP_SUCTION_SURFACE] = cap_upper
         unrotated[ComponentLabel.SPAR_CAP_PRESSURE_SURFACE] = cap_lower
         if web_union is not None:
             cap_upper = _wrap_expr_cap(cap_upper, Subtract(cap_upper.expr, web_union))
             cap_lower = _wrap_expr_cap(cap_lower, Subtract(cap_lower.expr, web_union))
-    elif sf == "C":
-        # Discrete caps, one per web. Clamp each band against its own local
-        # cavity depth, then take the common minimum: aft caps sit where the
-        # section is shallowest, and letting each shrink independently would
-        # make a nominally uniform discrete spar vary along the chord.
+    elif rule.kind == "per_web_pads":
+        if N < 1:
+            raise ValueError(
+                "per_web_pads cap placement requires at least one web "
+                f"(got N={N})."
+            )
         _clamped_c = [
             cap_feasibility_clamp(
                 airfoil_sdf,
@@ -252,37 +341,50 @@ def build_spar_caps(
                 c_hi = web_station_projection(nx, ny, x_hi, cy_i)
                 strip_c = _parallel_web_strip_clip(nx, ny, c_lo, c_hi)
                 strip_c_fw = _flapwise_strip_params(nx, ny, c_lo, c_hi)
-            caps_u.append(
-                SparCap(
-                    airfoil_sdf,
-                    skin_thickness,
-                    x_lo,
-                    x_hi,
-                    cap_h_upper,
-                    "suction_surface",
-                    strip_clip=strip_c,
-                    airfoil_expr_node=airfoil_expr_node,
-                    camber_xy=_camber_c,
-                    **strip_c_fw,
-                )
+            wall_u = _cap_wall(
+                skin_thickness=skin_thickness,
+                x_start=x_lo,
+                x_end=x_hi,
+                cap_height=cap_h_upper,
+                surface="suction_surface",
+                fw=strip_c_fw,
             )
-            caps_l.append(
-                SparCap(
-                    airfoil_sdf,
-                    skin_thickness,
-                    x_lo,
-                    x_hi,
-                    cap_h_lower,
-                    "pressure_surface",
-                    strip_clip=strip_c,
-                    airfoil_expr_node=airfoil_expr_node,
-                    camber_xy=_camber_c,
-                    **strip_c_fw,
-                )
+            wall_l = _cap_wall(
+                skin_thickness=skin_thickness,
+                x_start=x_lo,
+                x_end=x_hi,
+                cap_height=cap_h_lower,
+                surface="pressure_surface",
+                fw=strip_c_fw,
             )
-        for i, (cu, cl) in enumerate(zip(caps_u, caps_l)):
+            recipes[f"spar_cap_suction_surface_{i}"] = wall_u
+            recipes[f"spar_cap_pressure_surface_{i}"] = wall_l
+            cu = _project_cap(
+                wall_u,
+                airfoil_sdf,
+                airfoil_expr_node=airfoil_expr_node,
+                camber_xy=_camber_c,
+                strip_clip=strip_c,
+            )
+            cl = _project_cap(
+                wall_l,
+                airfoil_sdf,
+                airfoil_expr_node=airfoil_expr_node,
+                camber_xy=_camber_c,
+                strip_clip=strip_c,
+            )
+            caps_u.append(cu)
+            caps_l.append(cl)
             unrotated[f"spar_cap_suction_surface_{i}"] = cu
             unrotated[f"spar_cap_pressure_surface_{i}"] = cl
+        # Continuous labels point at the first pad's recipe for midline emit;
+        # discrete labels remain in recipes for constructive unions.
+        recipes[_label_str(ComponentLabel.SPAR_CAP_SUCTION_SURFACE)] = recipes[
+            "spar_cap_suction_surface_0"
+        ]
+        recipes[_label_str(ComponentLabel.SPAR_CAP_PRESSURE_SURFACE)] = recipes[
+            "spar_cap_pressure_surface_0"
+        ]
         cap_upper_expr = union_expr([c.expr for c in caps_u])
         cap_lower_expr = union_expr([c.expr for c in caps_l])
         if web_union is not None:
@@ -291,7 +393,7 @@ def build_spar_caps(
         cap_upper = _wrap_expr_cap(caps_u[0], cap_upper_expr)
         cap_lower = _wrap_expr_cap(caps_l[0], cap_lower_expr)
 
-    return cap_upper, cap_lower, unrotated
+    return cap_upper, cap_lower, unrotated, recipes
 
 
 __all__ = ["build_spar_caps"]

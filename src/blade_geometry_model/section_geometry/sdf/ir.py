@@ -137,7 +137,7 @@ class Shell(Expr):
 
 @dataclass(frozen=True)
 class Slab(Expr):
-    """Laminate slab between base=0 and base=-depth: max(base, -base - depth)."""
+    """Wall slab between base=0 and base=-depth: max(base, -base - depth)."""
 
     base: Expr
     depth: float

@@ -82,3 +82,38 @@ def test_topology_inserts_cap_web_junctions(layout_key, airfoil):
     topo_caps = {m.label: np.asarray(m.midline_twisted_pitch_axis_blade_frame).shape[0] for m in topo if m.kind == "cap"}
     shell_caps = {m.label: np.asarray(m.midline_twisted_pitch_axis_blade_frame).shape[0] for m in shell.midlines if m.kind == "cap"}
     assert topo_caps == shell_caps
+
+
+@pytest.mark.parametrize("layout_key, expect_kinds", [("0A", {"skin"}), ("0B", {"skin", "cap"})])
+def test_zero_web_topology_skips_web_junctions(layout_key, expect_kinds, airfoil):
+    from blade_structure_utilities.geometry_utilities.section_geometry.topology.shell_strip_topology import (
+        ShellStripTopologySpec,
+        build_shell_strip_topology,
+    )
+
+    strips = _strips(airfoil, layout_key)
+    assert not any(s.kind == "web" for s in strips)
+    topo = build_shell_strip_topology(strips, ShellStripTopologySpec())
+    kinds = {s.kind for s in topo}
+    assert kinds == expect_kinds
+    assert not any(s.kind == "web" for s in topo)
+    for s in topo:
+        if s.kind == "skin":
+            assert not str(s.label).endswith(":leading_edge")
+            assert not str(s.label).endswith(":trailing_edge")
+
+
+def test_zero_web_cell_loops_single_cavity(airfoil):
+    from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops import (
+        build_cell_wall_loops,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.topology.shell_strip_topology import (
+        ShellStripTopologySpec,
+        build_shell_strip_topology,
+    )
+
+    strips = _strips(airfoil, "0A")
+    topo = build_shell_strip_topology(strips, ShellStripTopologySpec())
+    loops = build_cell_wall_loops(topo)
+    assert len(loops) == 1
+    assert loops[0].web_labels == ()

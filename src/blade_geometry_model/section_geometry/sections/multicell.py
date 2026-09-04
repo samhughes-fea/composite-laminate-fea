@@ -20,11 +20,12 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.transform
 
 from ..layout.thickness_limits import (
     clamp_skin_thickness_m,
-    clamp_spar_laminate_thickness_m,
+    clamp_spar_thickness_m,
     clamp_web_thickness_m,
 )
+from ..layout.cap_placement import CapPlacementRule
 from ..layout.structural import parse_fixed_cap_anchor, parse_structural_family
-from .clips import (
+from .clip_algebra import (
     _parallel_web_half_gt,
     _parallel_web_half_lt,
     _parallel_web_strip_clip,
@@ -32,11 +33,17 @@ from .clips import (
     flapwise_web_normal,
     web_station_projection,
 )
-from .components import LEInsert, OuterSkin, SandwichCore, ShearWeb, TEInsert
-from .components.base import expr_callable, twist_component
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.base import (
+    expr_callable,
+    twist_component,
+)
+from .build_spar_caps import build_spar_caps
 from .labels import ComponentLabel
-from .spar_family import build_spar_caps
 from .web_layout import flapwise_web_sframe_inputs, resolve_web_anchors
+
+
+def _label_str(label: Any) -> str:
+    return str(getattr(label, "value", label))
 
 
 class MultiCellSection:
@@ -63,31 +70,69 @@ class MultiCellSection:
         fixed_cap_chord_half_width=None,
         discrete_cap_chord_half_width=None,
         *,
+        cap_placement=None,
+        web_endpoints=None,
         stage_sink: dict[str, float] | None = None,
     ):
-        xs_requested = sorted(float(x) for x in web_x_positions)
+        """Assemble a multi-cell section.
+
+        ``web_endpoints`` (optional): sequence of ``(x_top, y_top, x_bot, y_bot)``
+        for non-parallel / slanted webs. When set, ``web_x_positions`` /
+        ``web_y_coords`` are ignored for axis geometry (bay clips still use the
+        chordwise mid-station of each axis). True Y-branching (three or more
+        walls at one node) is out of scope.
+        """
+        explicit_endpoints = None
+        if web_endpoints is not None:
+            explicit_endpoints = [
+                (float(xt), float(yt), float(xb), float(yb))
+                for xt, yt, xb, yb in web_endpoints
+            ]
+            xs_requested = [
+                0.5 * (e[0] + e[2]) for e in explicit_endpoints
+            ]
+        else:
+            xs_requested = sorted(float(x) for x in web_x_positions)
+        # Catalogue echo only — assemble control flow uses CapPlacementRule.
         self._structural_family = parse_structural_family(structural_family)
-        if len(xs_requested) < 1 and self._structural_family not in ("A", "B"):
+        if cap_placement is not None:
+            _cap_rule = cap_placement
+        else:
+            _pos = None
+            fam = self._structural_family
+            if fam == "B":
+                _pos = parse_fixed_cap_anchor(fixed_cap_anchor)
+            _cap_rule = CapPlacementRule.from_structural_family(
+                fam, spar_cap_positioning=_pos
+            )
+        if len(xs_requested) < 1 and _cap_rule.kind not in ("none", "fixed_band"):
             raise ValueError(
                 "web_x_positions is empty, which is only supported for "
-                f"structural_family 'A' or 'B' (got {self._structural_family!r}). "
-                "Family 'C' builds one spar cap per web (nothing to build with zero "
-                "webs); family 'D' spans a cap between the outermost webs "
-                "(undefined with zero webs)."
+                f"cap placement 'none' or 'fixed_band' (got {_cap_rule.kind!r}). "
+                "per_web_pads needs one pad per web; continuous_box spans "
+                "outermost webs."
             )
 
-        skin_thickness = clamp_skin_thickness_m(skin_thickness)
+        skin_arg = skin_thickness
+        if isinstance(skin_arg, (int, float)):
+            t_ss = t_ps = clamp_skin_thickness_m(skin_arg)
+        else:
+            t_ss = clamp_skin_thickness_m(float(skin_arg[0]))
+            t_ps = clamp_skin_thickness_m(float(skin_arg[1]))
+        skin_thickness = max(t_ss, t_ps)
 
         self._af = airfoil_sdf
         self._skin_t = float(skin_thickness)
+        self._skin_t_ss = float(t_ss)
+        self._skin_t_ps = float(t_ps)
         self._twist = float(twist_angle)
-        if self._structural_family in ("B", "C"):
+        if _cap_rule.kind in ("fixed_band", "per_web_pads"):
             from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import AirfoilSDF as _AirfoilSDF
 
             if not isinstance(airfoil_sdf, _AirfoilSDF):
                 raise TypeError(
-                    "structural_family 'B' or 'C' requires airfoil_sdf to be "
-                    "AirfoilSDF (pitching / max-thickness anchors)."
+                    "fixed_band / per_web_pads require airfoil_sdf "
+                    "to be AirfoilSDF (pitching / max-thickness anchors)."
                 )
 
         self._airfoil_expr = airfoil_expr(airfoil_sdf)
@@ -95,19 +140,25 @@ class MultiCellSection:
             raise ValueError("MultiCellSection requires AirfoilSDF with vertices.")
 
         self._components: dict[str, Any] = {}
+        self._cap_placement = _cap_rule
 
         _chord = float(getattr(airfoil_sdf, "chord", 1.0))
-        _f_anchor = (
-            parse_fixed_cap_anchor(fixed_cap_anchor)
-            if self._structural_family == "B"
-            else None
-        )
         _pitch_fr = float(pitch_fraction_of_chord_from_le)
         _fhw = (
             float(fixed_cap_chord_half_width)
             if fixed_cap_chord_half_width is not None
-            else 0.05 * _chord
+            else (
+                float(_cap_rule.half_width)
+                if _cap_rule.half_width is not None
+                else 0.05 * _chord
+            )
         )
+        if _cap_rule.kind == "fixed_band" and _cap_rule.half_width is None:
+            _cap_rule = CapPlacementRule.fixed_band(
+                anchor=_cap_rule.anchor or "max_thickness",
+                half_width=_fhw,
+            )
+            self._cap_placement = _cap_rule
         _dhw = (
             float(discrete_cap_chord_half_width)
             if discrete_cap_chord_half_width is not None
@@ -115,19 +166,26 @@ class MultiCellSection:
         )
 
         with timed_stage("assemble_skin", stage_sink):
+            from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+                SkinWall,
+            )
+
             # SS/PS half-annuli (suction = camber-upper, pressure = camber-lower).
-            skin_ss = OuterSkin(
-                airfoil_sdf,
-                skin_thickness,
-                airfoil_expr_node=self._airfoil_expr,
-                skin_side="suction_surface",
+            wall_recipes: dict[str, Any] = {}
+            skin_ss_wall = SkinWall(
+                thickness=float(t_ss), skin_side="suction_surface"
             )
-            skin_ps = OuterSkin(
-                airfoil_sdf,
-                skin_thickness,
-                airfoil_expr_node=self._airfoil_expr,
-                skin_side="pressure_surface",
+            skin_ps_wall = SkinWall(
+                thickness=float(t_ps), skin_side="pressure_surface"
             )
+            skin_ss = skin_ss_wall.to_sdf_component(
+                airfoil_sdf, airfoil_expr_node=self._airfoil_expr
+            )
+            skin_ps = skin_ps_wall.to_sdf_component(
+                airfoil_sdf, airfoil_expr_node=self._airfoil_expr
+            )
+            wall_recipes[_label_str(ComponentLabel.SKIN_SUCTION_SURFACE)] = skin_ss_wall
+            wall_recipes[_label_str(ComponentLabel.SKIN_PRESSURE_SURFACE)] = skin_ps_wall
             self._components[ComponentLabel.SKIN_SUCTION_SURFACE] = skin_ss
             self._components[ComponentLabel.SKIN_PRESSURE_SURFACE] = skin_ps
             # Boundary SDFs stay full-annulus (cores/webs/inserts use the cavity).
@@ -138,7 +196,10 @@ class MultiCellSection:
             phi_inner_ref = expr_callable(Offset(self._airfoil_expr, amount=-skin_thickness))
 
         with timed_stage("assemble_anchors", stage_sink):
-            if web_y_coords is None:
+            if explicit_endpoints is not None:
+                xs = [0.5 * (e[0] + e[2]) for e in explicit_endpoints]
+                anchors = [(e[1], e[3]) for e in explicit_endpoints]
+            elif web_y_coords is None:
                 resolved = resolve_web_anchors(
                     airfoil_sdf,
                     skin_thickness,
@@ -161,7 +222,7 @@ class MultiCellSection:
                     raise ValueError(f"web_y_coords must have {len(xs)} entries.")
 
         N = len(xs)
-        if np.isscalar(web_thickness):
+        if isinstance(web_thickness, (int, float)):
             web_thicknesses = [float(web_thickness)] * N
         else:
             web_thicknesses = [float(t) for t in web_thickness]
@@ -183,12 +244,12 @@ class MultiCellSection:
                 )
             web_alignments = web_alignments[:N]
 
-        if np.isscalar(cap_height):
+        if isinstance(cap_height, (int, float)):
             cap_h_upper = cap_h_lower = float(cap_height)
         else:
             cap_h_upper, cap_h_lower = float(cap_height[0]), float(cap_height[1])
-        cap_h_upper = clamp_spar_laminate_thickness_m(cap_h_upper)
-        cap_h_lower = clamp_spar_laminate_thickness_m(cap_h_lower)
+        cap_h_upper = clamp_spar_thickness_m(cap_h_upper)
+        cap_h_lower = clamp_spar_thickness_m(cap_h_lower)
 
         with timed_stage("assemble_webs", stage_sink):
             all_flapwise = N > 0 and all(a == "flapwise" for a in web_alignments)
@@ -221,10 +282,16 @@ class MultiCellSection:
                     y_search_b = (-1.5, 1.5)
 
             web_components = []
+            from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+                WebWall,
+            )
+
             for i, (x, t, align, (y_top, y_bot)) in enumerate(
                 zip(xs, web_thicknesses, web_alignments, anchors)
             ):
-                if align == "flapwise" and needs_b_frame_lookup:
+                if explicit_endpoints is not None:
+                    x_top_S, y_top_S, x_bot_S, y_bot_S = explicit_endpoints[i]
+                elif align == "flapwise" and needs_b_frame_lookup:
                     x_top_S, y_top_S, x_bot_S, y_bot_S = flapwise_web_sframe_inputs(
                         x, y_top, y_bot, twist_angle, phi_inner_b, y_search_b
                     )
@@ -234,30 +301,36 @@ class MultiCellSection:
                     y_top_S = y_top
                     y_bot_S = y_bot
 
-                web = ShearWeb(
-                    airfoil_sdf=airfoil_sdf,
-                    skin_thickness=skin_thickness,
-                    x_top=x_top_S,
-                    y_top=y_top_S,
-                    x_bot=x_bot_S,
-                    y_bot=y_bot_S,
-                    thickness=t,
-                    alignment=align,
+                web_wall = WebWall(
+                    skin_thickness=float(skin_thickness),
+                    x_top=float(x_top_S),
+                    y_top=float(y_top_S),
+                    x_bot=float(x_bot_S),
+                    y_bot=float(y_bot_S),
+                    thickness=float(t),
+                    alignment=str(align),
                     twist_angle=float(twist_angle),
-                    airfoil_expr_node=self._airfoil_expr,
                 )
                 label = f"shear_web_{i}"
+                web = web_wall.to_sdf_component(
+                    airfoil_sdf, airfoil_expr_node=self._airfoil_expr
+                )
+                wall_recipes[label] = web_wall
                 self._components[label] = web
                 web_components.append(web)
 
-        sf = self._structural_family
         cap_upper = cap_lower = None
         spar_cap_components_unrotated: dict[str, Any] = {}
+        spar_cap_wall_recipes: dict[str, Any] = {}
 
         with timed_stage("assemble_caps", stage_sink):
-            if sf != "A":
-                cap_upper, cap_lower, spar_cap_components_unrotated = build_spar_caps(
-                    sf,
+            if _cap_rule.kind != "none":
+                (
+                    cap_upper,
+                    cap_lower,
+                    spar_cap_components_unrotated,
+                    spar_cap_wall_recipes,
+                ) = build_spar_caps(
                     airfoil_sdf,
                     skin_thickness,
                     xs,
@@ -265,13 +338,13 @@ class MultiCellSection:
                     cap_h_upper,
                     cap_h_lower,
                     web_components,
+                    cap_placement=_cap_rule,
                     airfoil_expr_node=self._airfoil_expr,
                     all_flapwise=all_flapwise,
                     c_station=c_station,
                     nx=_nx,
                     ny=_ny,
                     N=N,
-                    f_anchor=_f_anchor,
                     pitch_fr=_pitch_fr,
                     fhw=_fhw,
                     dhw=_dhw,
@@ -280,15 +353,25 @@ class MultiCellSection:
                 )
                 self._components[ComponentLabel.SPAR_CAP_SUCTION_SURFACE] = cap_upper
                 self._components[ComponentLabel.SPAR_CAP_PRESSURE_SURFACE] = cap_lower
+                for label, wall in spar_cap_wall_recipes.items():
+                    wall_recipes[label] = wall
 
         self._spar_cap_components_unrotated = dict(spar_cap_components_unrotated)
+        self._spar_cap_wall_recipes = dict(spar_cap_wall_recipes)
 
-        laminates_for_core = (
-            list(web_components) if sf == "A" else [cap_upper, cap_lower] + web_components
+        # Wall solids excluded from sandwich-core fill (not layup/material).
+        wall_solids_for_core = (
+            list(web_components)
+            if _cap_rule.kind == "none"
+            else [cap_upper, cap_lower] + web_components
         )
-        laminate_exprs = [c.expr for c in laminates_for_core if c is not None]
+        wall_exclusion_exprs = [c.expr for c in wall_solids_for_core if c is not None]
 
         with timed_stage("assemble_cores", stage_sink):
+            from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+                CoreWall,
+            )
+
             if core_enabled and N >= 1:
                 n_bays = N + 1
                 for k in range(n_bays):
@@ -308,18 +391,20 @@ class MultiCellSection:
                             fw_mode = "strip"
                             c_lo = float(min(c_station[k - 1], c_station[k]))
                             c_hi = float(max(c_station[k - 1], c_station[k]))
-                        core = SandwichCore(
-                            airfoil_sdf=airfoil_sdf,
-                            skin_thickness=skin_thickness,
-                            strip_clip=sclip,
-                            airfoil_expr_node=self._airfoil_expr,
-                            exclusion_exprs=laminate_exprs,
+                        core_wall = CoreWall(
+                            skin_thickness=float(skin_thickness),
                             bay_mode="flapwise",
                             flapwise_nx=float(_nx),
                             flapwise_ny=float(_ny),
                             flapwise_c_lo=c_lo,
                             flapwise_c_hi=c_hi,
-                            flapwise_clip_mode=fw_mode,
+                            flapwise_clip_mode=fw_mode,  # type: ignore[arg-type]
+                        )
+                        core = core_wall.to_sdf_component(
+                            airfoil_sdf,
+                            airfoil_expr_node=self._airfoil_expr,
+                            exclusion_exprs=wall_exclusion_exprs,
+                            strip_clip=sclip,
                         )
                     else:
                         if k == 0:
@@ -328,57 +413,79 @@ class MultiCellSection:
                             x_s, x_e = xs[-1], None
                         else:
                             x_s, x_e = xs[k - 1], xs[k]
-                        core = SandwichCore(
-                            airfoil_sdf=airfoil_sdf,
-                            skin_thickness=skin_thickness,
+                        core_wall = CoreWall(
+                            skin_thickness=float(skin_thickness),
+                            bay_mode="chordwise",
                             x_start=x_s,
                             x_end=x_e,
-                            airfoil_expr_node=self._airfoil_expr,
-                            exclusion_exprs=laminate_exprs,
-                            bay_mode="chordwise",
                         )
-                    self._components[f"sandwich_core_{k}"] = core
+                        core = core_wall.to_sdf_component(
+                            airfoil_sdf,
+                            airfoil_expr_node=self._airfoil_expr,
+                            exclusion_exprs=wall_exclusion_exprs,
+                        )
+                    label = f"sandwich_core_{k}"
+                    wall_recipes[label] = core_wall
+                    self._components[label] = core
             elif core_enabled and N == 0:
                 # Zero webs: a single whole-envelope bay (no chordwise/flapwise
                 # split point exists), excluding whatever cap regions were built.
-                core = SandwichCore(
-                    airfoil_sdf=airfoil_sdf,
-                    skin_thickness=skin_thickness,
+                core_wall = CoreWall(
+                    skin_thickness=float(skin_thickness),
+                    bay_mode="chordwise",
                     x_start=None,
                     x_end=None,
-                    airfoil_expr_node=self._airfoil_expr,
-                    exclusion_exprs=laminate_exprs,
-                    bay_mode="chordwise",
                 )
+                core = core_wall.to_sdf_component(
+                    airfoil_sdf,
+                    airfoil_expr_node=self._airfoil_expr,
+                    exclusion_exprs=wall_exclusion_exprs,
+                )
+                wall_recipes["sandwich_core_0"] = core_wall
                 self._components["sandwich_core_0"] = core
 
         if trailing_edge_insert_x_m is not None:
-            te = TEInsert(
-                airfoil_sdf=airfoil_sdf,
-                skin_thickness=skin_thickness,
-                x_start=float(trailing_edge_insert_x_m),
-                airfoil_expr_node=self._airfoil_expr,
+            from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+                InsertWall,
             )
+
+            te_wall = InsertWall(
+                kind="trailing_edge",
+                skin_thickness=float(skin_thickness),
+                x_limit=float(trailing_edge_insert_x_m),
+            )
+            te = te_wall.to_sdf_component(
+                airfoil_sdf, airfoil_expr_node=self._airfoil_expr
+            )
+            wall_recipes[_label_str(ComponentLabel.TRAILING_EDGE_INSERT)] = te_wall
             self._components[ComponentLabel.TRAILING_EDGE_INSERT] = te
 
         if leading_edge_insert_x_m is not None:
+            from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
+                InsertWall,
+            )
+
             le_x = 0.0
             try:
                 le_x = float(airfoil_sdf.leading_edge[0])
             except AttributeError:
                 pass
-            le = LEInsert(
-                airfoil_sdf=airfoil_sdf,
-                skin_thickness=skin_thickness,
-                x_end=float(leading_edge_insert_x_m),
+            le_wall = InsertWall(
+                kind="leading_edge",
+                skin_thickness=float(skin_thickness),
+                x_limit=float(leading_edge_insert_x_m),
                 le_x=le_x,
                 le_y=0.0,
                 radius=le_radius,
-                airfoil_expr_node=self._airfoil_expr,
             )
+            le = le_wall.to_sdf_component(
+                airfoil_sdf, airfoil_expr_node=self._airfoil_expr
+            )
+            wall_recipes[_label_str(ComponentLabel.LEADING_EDGE_INSERT)] = le_wall
             self._components[ComponentLabel.LEADING_EDGE_INSERT] = le
 
         self._components_unrotated = dict(self._components)
+        self._wall_recipes = wall_recipes
         self._skin_outer_boundary_unrotated_sdf = skin_outer_sdf
         self._skin_inner_boundary_unrotated_sdf = skin_inner_sdf
         if abs(self._twist) > 1e-10:
@@ -442,8 +549,24 @@ class MultiCellSection:
         return dict(self._spar_cap_components_unrotated)
 
     @property
+    def wall_recipes(self) -> dict[str, Any]:
+        """Frozen wall recipes keyed by label (assemble-time SoT)."""
+        return dict(self._wall_recipes)
+
+    @property
+    def spar_cap_wall_recipes(self) -> dict[str, Any]:
+        """Frozen discrete spar-cap recipes (chord frame; midline SoT)."""
+        return dict(self._spar_cap_wall_recipes)
+
+    @property
     def structural_family(self):
+        """Catalogue family letter echo (not assemble control flow)."""
         return self._structural_family
+
+    @property
+    def cap_placement(self) -> CapPlacementRule:
+        """Effective :class:`CapPlacementRule` used at assemble."""
+        return self._cap_placement
 
     def eval(self, label, x, y, memo=None):
         return self._components[label](x, y, memo=memo)
@@ -484,7 +607,7 @@ class MultiCellSection:
     def __repr__(self):
         return (
             f"MultiCellSection("
-            f"structural_family={self._structural_family!r}, "
+            f"cap_placement={self._cap_placement.kind!r}, "
             f"n_webs={self.n_webs}, "
             f"n_cells={self.n_cells}, "
             f"twist={np.degrees(self._twist):.1f}°, "

@@ -1,4 +1,4 @@
-﻿"""SG-009 offline check: production shared nodes vs axis x cap oracle.
+"""SG-009 offline check: production shared nodes vs axis x cap oracle.
 
 Production already uses ``intersect_web_axis_open_polyline_2d`` inside
 ``insert_cap_web_interior_junctions``. This script re-solves the same oracle

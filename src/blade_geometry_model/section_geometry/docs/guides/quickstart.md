@@ -110,8 +110,9 @@ spec = resolve_system_type("2D-F")
 # spec.n_webs, spec.structural_family, spec.web_orientation, ...
 ```
 
-Layouts `0A` / `0B` are valid zero-web hosts; shell-mesh handoff is unsupported
-(see package README Optional outputs).
+Layouts `0A` / `0B` are valid zero-web hosts; shell-mesh handoff accepts
+skin ± optional caps (no web junctions). See
+[`ADR_ZERO_WEB_SHELL_MESH.md`](../reference/ADR_ZERO_WEB_SHELL_MESH.md).
 
 ---
 

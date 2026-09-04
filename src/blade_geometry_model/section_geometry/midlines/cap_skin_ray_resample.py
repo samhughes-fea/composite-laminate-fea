@@ -173,8 +173,15 @@ def _resample_one_cap_interior_from_skin_rays(
     *,
     skin_sides: NDArray[np.object_] | None = None,
     cap_side: str | None = None,
+    junction_seeds: list[NDArray[np.float64]] | None = None,
 ) -> ShellMidlineStrip | None:
-    """Return replaced cap strip, or ``None`` to keep original."""
+    """Return replaced cap strip, or ``None`` to keep original.
+
+    ``junction_seeds`` are points that must survive the rebuild (typically
+    pre-resample web-axis × cap crossings). They are re-inserted onto the
+    resampled polyline by nearest-edge projection so later topology can
+    find conformal T-junctions without rediscovering tangencies.
+    """
     pts = np.asarray(cap_strip.midline_twisted_pitch_axis_blade_frame, dtype=float)
     if pts.shape[0] < 3:
         return None
@@ -214,7 +221,7 @@ def _resample_one_cap_interior_from_skin_rays(
             collected.append((s_cap, hit))
             break
 
-    if len(collected) < 1:
+    if len(collected) < 1 and not junction_seeds:
         return None
 
     collected.sort(key=lambda x: x[0])
@@ -242,7 +249,97 @@ def _resample_one_cap_interior_from_skin_rays(
         new_pts[-1], p1, atol=1e-12, rtol=0.0
     ):
         return None
+
+    if junction_seeds:
+        new_pts = _reinsert_junction_seeds(new_pts, junction_seeds, min_seg=min_keep)
+
     return replace(cap_strip, midline_twisted_pitch_axis_blade_frame=new_pts)
+
+
+def _reinsert_junction_seeds(
+    pts: NDArray[np.float64],
+    seeds: list[NDArray[np.float64]],
+    *,
+    min_seg: float,
+) -> NDArray[np.float64]:
+    """Insert seed points that already lie near ``pts`` (no relocation)."""
+    out = np.asarray(pts, dtype=float)
+    for seed in seeds:
+        p = np.asarray(seed, dtype=float).reshape(2)
+        if float(np.linalg.norm(out - p, axis=1).min()) <= 1e-9:
+            continue
+        # Project seed onto nearest edge; if far, skip (seed was for old shape).
+        a = out[:-1]
+        b = out[1:]
+        ab = b - a
+        l2 = np.sum(ab * ab, axis=1) + 1e-30
+        t = np.sum((p[None, :] - a) * ab, axis=1) / l2
+        best_i = -1
+        best_d = float("inf")
+        best_t = 0.0
+        for i in range(len(a)):
+            ti = float(np.clip(t[i], 0.0, 1.0))
+            c = a[i] + ab[i] * ti
+            d = float(np.linalg.norm(p - c))
+            if d < best_d:
+                best_d = d
+                best_i = i
+                best_t = ti
+        if best_i < 0 or best_d > max(1e-3, 5.0 * min_seg):
+            continue
+        # Prefer the exact seed when already on the polyline within a hair.
+        insert_p = p if best_d <= 1e-9 else (a[best_i] + ab[best_i] * best_t)
+        rows: list[NDArray[np.float64]] = []
+        for i in range(out.shape[0] - 1):
+            rows.append(out[i].copy())
+            if i == best_i:
+                if float(np.linalg.norm(insert_p - rows[-1])) >= min_seg and float(
+                    np.linalg.norm(out[i + 1] - insert_p)
+                ) >= min_seg:
+                    rows.append(np.asarray(insert_p, dtype=float).reshape(2))
+        rows.append(out[-1].copy())
+        out = np.stack(rows, axis=0)
+    return out
+
+
+def _collect_cap_web_junction_seeds(
+    strips: tuple[ShellMidlineStrip, ...],
+) -> dict[int, list[NDArray[np.float64]]]:
+    """Pre-resample interior crossings via junction_primitives (axis × cap)."""
+    from blade_structure_utilities.geometry_utilities.section_geometry.midlines.junction_primitives import (
+        intersect_axis_cap_polyline,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.midlines.ring_geometry import (
+        open_polyline_prefix_lengths,
+    )
+
+    webs = [
+        np.asarray(st.midline_twisted_pitch_axis_blade_frame, dtype=float)
+        for st in strips
+        if st.kind == "web"
+        and np.asarray(st.midline_twisted_pitch_axis_blade_frame).shape[0] >= 2
+    ]
+    seeds: dict[int, list[NDArray[np.float64]]] = {}
+    for idx, st in enumerate(strips):
+        if st.kind != "cap":
+            continue
+        pts = np.asarray(st.midline_twisted_pitch_axis_blade_frame, dtype=float)
+        if pts.shape[0] < 2:
+            continue
+        prefix = open_polyline_prefix_lengths(pts)
+        arc = float(prefix[-1])
+        merge = 1e-7 * max(arc, 1e-15)
+        collected: list[NDArray[np.float64]] = []
+        for w in webs:
+            for i, _j, ta, _tb, p_hit in intersect_axis_cap_polyline(w, pts):
+                seg = float(np.linalg.norm(pts[i + 1] - pts[i]))
+                s_hit = float(prefix[i] + ta * seg)
+                if s_hit <= merge or s_hit >= arc - merge:
+                    continue
+                collected.append(np.asarray(p_hit, dtype=float).reshape(2))
+        if collected:
+            seeds[idx] = collected
+    return seeds
 
 
 def resample_cap_interiors_from_skin_rays(
@@ -251,8 +348,11 @@ def resample_cap_interiors_from_skin_rays(
     """Replace interior vertices of each cap using inward rays from skin master ring.
 
     Cap **endpoints** are left unchanged — they are already at their true extent
-    on emit, and nothing downstream relocates them. If resampling yields too few
-    hits for a cap, that strip is left unchanged.
+    on emit, and nothing downstream relocates them. Pre-resample web×cap
+    **junction seeds** are collected and re-inserted after the rebuild so later
+    topology does not have to rediscover crossings that resampling would erase.
+
+    If resampling yields too few hits for a cap, that strip is left unchanged.
 
     Which skin a cap sits under is taken from the strips' declared
     ``surface`` / ``skin_side``, not from a bounding box. The bounding-box
@@ -268,8 +368,10 @@ def resample_cap_interiors_from_skin_rays(
     if skin_tangents.shape[0] != skin_ring.shape[0]:
         return strips
 
+    seeds_by_cap = _collect_cap_web_junction_seeds(strips)
+
     out: list[ShellMidlineStrip] = []
-    for st in strips:
+    for idx, st in enumerate(strips):
         if st.kind != "cap":
             out.append(st)
             continue
@@ -279,6 +381,7 @@ def resample_cap_interiors_from_skin_rays(
             skin_tangents,
             skin_sides=skin_sides,
             cap_side=_surface_side(st.surface),
+            junction_seeds=seeds_by_cap.get(idx),
         )
         out.append(new_st if new_st is not None else st)
     return tuple(out)

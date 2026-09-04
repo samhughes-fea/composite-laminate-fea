@@ -2,15 +2,16 @@
 
 ↑ [`section_geometry`](../README.md)
 
-For mature labels (skin, webs, caps, cores), builds explicit boundary polygons
-from the same recipes and integrates area / second moments by shoelace. LE/TE
-inserts remain on the SDF residual path. Parity:
+For mature labels (skin, webs, caps, cores, LE/TE inserts), builds explicit
+boundary polygons from the same recipes and integrates area / second moments
+by shoelace. Residual φ remains available as a debug backend when an insert
+recipe sets `emission_maturity='residual_phi'`. Parity:
 [`../docs/reports/DUAL_REP_ACCEPTANCE.md`](../docs/reports/DUAL_REP_ACCEPTANCE.md). Packaging:
 [`../props_emit/`](../props_emit/README.md).
 
-Code names such as `emit_laminate_polygons` / `is_laminate_label` mean
-**structural wall solids** (skin / web / spar cap), not composite layup —
-this package does not bind materials.
+Prefer `emit_wall_solid_polygons` / `is_wall_solid_label`. Wall solids are
+geometric thickness regions (skin / web / spar cap), not composite layup —
+material binding belongs to `section_bind` / `section_layup` / `section_schedule`.
 
 ## Table of contents
 

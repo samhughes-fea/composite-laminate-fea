@@ -606,7 +606,7 @@ def plot_section_hybrid(
     twist_rad: float | None = None,
     chord_m: float | None = None,
 ):
-    """Plot laminates from constructive polygons and residuals from quadtree mesh.
+    """Plot wall solids from constructive polygons and residuals from quadtree mesh.
 
     Constructive rings and residual mesh leaves are rotated-NACA; with
     ``structural_axes`` they are remapped to canonical B plot axes.

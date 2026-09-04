@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import ShellMidlineStrip
-from blade_structure_utilities.geometry_utilities.section_geometry.sdf.profiling import timed_stage
+from blade_structure_utilities.geometry_utilities.section_geometry.profiling import timed_stage
 
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.cap_skin_ray_resample import (
     concat_skin_ring_vertices,
@@ -47,20 +47,42 @@ def build_shell_strip_topology(
     spec: ShellStripTopologySpec | None = None,
     *,
     stage_sink: dict[str, float] | None = None,
+    airfoil=None,
+    cap_mid_depth_m: float | None = None,
 ) -> tuple[ShellMidlineStrip, ...]:
     """Prepare strip junctions for shell meshing.
 
     When ``stage_sink`` is provided (or ``SECTION_GEOMETRY_PROFILE=1``), records
     ``topology_split`` / ``topology_cap_ray`` / ``topology_cap_web`` substages.
+
+    Optional ``airfoil`` + ``cap_mid_depth_m`` (same frame as strips) let interior
+    junctions prefer axis × offset locus before falling back to the final cap
+    polyline.
     """
     cfg = spec if spec is not None else ShellStripTopologySpec()
-    with timed_stage("topology_split", stage_sink):
-        out = split_skin_at_junctions(strips, merge_s_tol_m=cfg.merge_s_tol_m)
+    has_webs = any(s.kind == "web" for s in strips)
+
+    # N = 0 (skin ± caps): do not invent web feet / LE–bay–TE panelisation.
+    # Cap ray resample still applies for family-B caps; cap–web inserts no-op.
+    if has_webs:
+        with timed_stage("topology_split", stage_sink):
+            out = split_skin_at_junctions(strips, merge_s_tol_m=cfg.merge_s_tol_m)
+    else:
+        with timed_stage("topology_split", stage_sink):
+            out = strips
+
     if cfg.cap_resample_from_skin_rays:
         with timed_stage("topology_cap_ray", stage_sink):
             out = resample_cap_interiors_from_skin_rays(out)
-    with timed_stage("topology_cap_web", stage_sink):
-        out = insert_cap_web_interior_junctions(out)
+
+    # Cap–web interior junctions are a no-op without webs; skip the stage.
+    if has_webs:
+        with timed_stage("topology_cap_web", stage_sink):
+            out = insert_cap_web_interior_junctions(
+                out,
+                airfoil=airfoil,
+                cap_mid_depth_m=cap_mid_depth_m,
+            )
     return out
 
 

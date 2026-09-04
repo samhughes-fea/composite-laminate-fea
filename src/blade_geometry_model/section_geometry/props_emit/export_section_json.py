@@ -207,7 +207,7 @@ def export_section_json(
     _component_boundaries: dict = {}
 
     def _constructive_boundary(lab: str):
-        """Exterior (+ holes) rings from constructive laminate polygons when available."""
+        """Exterior (+ holes) rings from constructive wall-solid polygons when available."""
         from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
             emit_constructive_polygons,
             is_constructive_label,

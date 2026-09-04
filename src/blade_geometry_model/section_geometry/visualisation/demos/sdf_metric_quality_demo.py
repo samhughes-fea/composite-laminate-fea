@@ -9,7 +9,7 @@ where |∇φ| collapses. This demo makes that visible on:
 
 * airfoil polyline SDF (near-metric)
 * outer-skin half-annulus slab (SS) after Intersect/camber clip
-* multi-cell CSG union of laminates
+* multi-cell CSG union of wall solids
 
 Writes:
 
@@ -130,14 +130,14 @@ def main(argv: list[str] | None = None) -> Path:
     grid = SDFGrid.from_airfoil(af, padding=0.08, nx=500, ny=220)
 
     skin_ss = section["skin_suction_surface"]
-    laminates = [
+    wall_solids = [
         section[lab]
         for lab in section.labels
         if str(getattr(lab, "value", lab)).startswith(
             ("outer_skin", "web_", "spar_cap_")
         )
     ]
-    union_fn = union_all(laminates)
+    union_fn = union_all(wall_solids)
 
     # Carry the stats key alongside each field. Deriving it from the title by
     # substring match silently mislabelled the middle field and left its entry
@@ -145,7 +145,7 @@ def main(argv: list[str] | None = None) -> Path:
     fields = [
         ("airfoil SDF", af, 0.08, "airfoil"),
         ("skin_suction_surface (slab ∩ camber)", skin_ss, 0.04, "skin_suction_surface"),
-        ("laminate CSG union", union_fn, 0.04, "laminate_union"),
+        ("wall-solid CSG union", union_fn, 0.04, "wall_solid_union"),
     ]
 
     fig, axes = plt.subplots(2, 3, figsize=(15.0, 7.5))

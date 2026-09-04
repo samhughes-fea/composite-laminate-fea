@@ -36,7 +36,8 @@ python blade_structure_utilities/geometry_utilities/section_geometry/visualisati
 ## Web count X = 0 — no shear webs
 
 Skin (optional single-band caps). `0A` / `0B` remain catalogue keys; shell-mesh
-handoff unsupported (package README Optional outputs).
+handoff is skin ± caps with no web junctions
+([`ADR_ZERO_WEB_SHELL_MESH.md`](ADR_ZERO_WEB_SHELL_MESH.md)).
 
 | Key | Meaning |
 |-----|---------|

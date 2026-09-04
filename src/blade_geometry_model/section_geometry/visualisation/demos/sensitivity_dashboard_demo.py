@@ -1,4 +1,4 @@
-﻿"""
+"""
 visualisation/demos/sensitivity_dashboard_demo.py
 =====================================
 Finite-difference sensitivity dashboard for implicit section geometry.

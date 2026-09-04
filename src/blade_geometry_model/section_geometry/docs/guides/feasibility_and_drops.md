@@ -62,12 +62,15 @@ Runnable comparison:
 
 | Key | Geometry | Shell-mesh handoff |
 |-----|----------|--------------------|
-| `0A` | Outer skin only | Unsupported |
-| `0B` | Skin + single upper/lower spar-cap band | Unsupported |
+| `0A` | Outer skin only | Intended (skin strips; no web junctions) |
+| `0B` | Skin + single upper/lower spar-cap band | Intended (skin + cap strips; no web junctions) |
 
-Both remain valid catalogue keys for solids / properties. Midline-based
-`section_mesh` handoff needs webs (and gated midlines). See package README
-Optional outputs and [`geometry_to_mesh.md`](geometry_to_mesh.md).
+Both are valid catalogue keys for solids / properties **and** shell mesh.
+Web feet and cap–web interiors are simply absent when `n_webs == 0`. Historical
+“unsupported” wording described junction code that assumed webs — an
+implementation gap, not the product rule. See
+[`ADR_ZERO_WEB_SHELL_MESH.md`](../reference/ADR_ZERO_WEB_SHELL_MESH.md) and
+[`geometry_to_mesh.md`](geometry_to_mesh.md).
 
 ---
 

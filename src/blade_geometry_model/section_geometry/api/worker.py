@@ -16,20 +16,84 @@ from blade_structure_utilities.geometry_utilities.section_contract.cell_wall_loo
 from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import (
     ShellMidlineStrip,
 )
+from blade_structure_utilities.geometry_utilities.section_geometry.layout.section_layout import (
+    SectionLayout,
+)
 from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
     SystemLayoutSpec,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.props_compute import (
-    PropsBackendArg,
-)
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.section_midline_host import (
     SectionMidlineHost,
+)
+from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.props_compute import (
+    PropsBackendArg,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import (
     AirfoilSDF,
 )
 from blade_structure_utilities.mesh_utilities.area_2d.quadtree import QuadTreeMesh
 from blade_structure_utilities.mesh_utilities.area_2d.spec import QuadtreeSpec
+
+LayoutInput = SystemLayoutSpec | SectionLayout
+
+
+def _layout_web_fracs(layout: LayoutInput) -> tuple[float, ...]:
+    return tuple(float(f) for f in (layout.web_chord_fracs or ()))
+
+
+def _layout_n_webs(layout: LayoutInput) -> int:
+    if isinstance(layout, SectionLayout):
+        return int(layout.n_webs)
+    return int(layout.n_webs or 0)
+
+
+def _as_system_layout_if_possible(layout: LayoutInput) -> SystemLayoutSpec | None:
+    if isinstance(layout, SystemLayoutSpec):
+        return layout
+    if layout.catalogue_key:
+        return layout.to_system_layout_spec()
+    return None
+
+
+def _step_down_section_layout(layout: SectionLayout, n_webs: int) -> SectionLayout:
+    """Reduce a keyless parametric layout to ``n_webs`` survivors."""
+    from blade_structure_utilities.geometry_utilities.section_geometry.layout.cap_placement import (
+        CapPlacementRule,
+    )
+
+    n = int(n_webs)
+    if n < 0:
+        raise ValueError(f"n_webs must be >= 0; got {n_webs!r}.")
+    fracs = tuple(float(f) for f in layout.web_chord_fracs[:n])
+    stations = (
+        None
+        if layout.web_stations_m is None
+        else tuple(float(x) for x in layout.web_stations_m[:n])
+    )
+    axes = (
+        None
+        if layout.web_axes_m is None
+        else tuple(layout.web_axes_m[:n])
+    )
+    cap = layout.cap_placement
+    # Mirror catalogue D→C: a continuous box needs ≥2 webs.
+    if n < 2 and cap.kind == "continuous_box":
+        cap = CapPlacementRule.per_web_pads()
+    fam = layout.structural_family
+    if n < 2 and str(fam or "").upper() == "D":
+        fam = "C"
+    return SectionLayout(
+        web_chord_fracs=fracs,
+        orientation=layout.orientation,
+        cap_placement=cap,
+        # Survivors are parametric until a catalogue preset is re-attached.
+        catalogue_key=None if n != _layout_n_webs(layout) else layout.catalogue_key,
+        web_stations_m=stations,
+        web_axes_m=axes,
+        structural_family=fam,
+        flags=layout.flags,
+    )
+
 
 OutputGate = Literal["properties", "midlines", "cell_wall_loops"]
 ALL_OUTPUT_GATES: frozenset[str] = frozenset(
@@ -65,7 +129,7 @@ class SectionPropertiesMeta:
     grid: dict[str, int] | None = None
     quadtree_spec: dict[str, Any] | None = None
     constructive_labels: tuple[str, ...] | None = None
-    laminate_labels: tuple[str, ...] | None = None
+    wall_solid_labels: tuple[str, ...] | None = None
     residual_labels: tuple[str, ...] | None = None
     residual_maturity: dict[str, str] | None = None
     constructive_s: float | None = None
@@ -109,7 +173,7 @@ class SectionPropertiesMeta:
                 else None
             ),
             constructive_labels=_str_tuple("constructive_labels"),
-            laminate_labels=_str_tuple("laminate_labels"),
+            wall_solid_labels=_str_tuple("wall_solid_labels"),
             residual_labels=_str_tuple("residual_labels"),
             residual_maturity=maturity,
             constructive_s=(
@@ -143,6 +207,15 @@ class SectionGeometryResult:
 
     ``section`` implements :class:`SectionMidlineHost` for midline / mesh export.
 
+    ``properties_map`` (when gated) carries area / first / second moments in the
+    **solids' authoring frame as built** — with host twist that is LE-origin
+    rotated-NACA, **not** frame **B** (`twisted_pitch_axis_blade_frame`). Do not
+    silently re-twist the map to match emit midlines.
+
+    ``quadtree_mesh`` is **G-PROPS debug only** (populated when ``retain_mesh``
+    is true). It is not a shell-mesh product; density / Q4 / +x3 stay in
+    ``section_mesh``.
+
     ``stage_timings`` is a small ``{stage: seconds}`` dict populated when
     ``SECTION_GEOMETRY_PROFILE=1`` (assemble / assemble_* / properties /
     properties_* / emit_* / midlines / topology / topology_* / cell_wall_loops).
@@ -163,7 +236,7 @@ class SectionGeometryResult:
 
 
 def section_geometry_prep_key(
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     airfoil: AirfoilSDF,
     *,
     skin_thickness: float | None = None,
@@ -210,13 +283,21 @@ def section_geometry_prep_key(
         else:
             airfoil_id = ("airfoil", chord, id(airfoil))
 
+    # Always key on parametric SectionLayout (catalogue specs are presets).
+    layout_sot = layout if isinstance(layout, SectionLayout) else _as_section_layout(layout)
+    cap = layout_sot.cap_placement
     layout_key = (
-        str(layout.geometry_mode),
-        int(layout.n_webs or 0),
-        tuple(float(f) for f in (layout.web_chord_fracs or ())),
-        str(layout.structural_family),
-        str(layout.web_orientation),
-        bool(layout.has_spar_caps),
+        "section_layout",
+        layout_sot.catalogue_key,
+        _layout_web_fracs(layout_sot),
+        None
+        if layout_sot.web_stations_m is None
+        else tuple(float(x) for x in layout_sot.web_stations_m),
+        str(layout_sot.orientation),
+        str(cap.kind),
+        str(cap.anchor),
+        None if cap.half_width is None else float(cap.half_width),
+        str(layout_sot.structural_family),
     )
     out_key = tuple(sorted(normalize_output_gates(outputs)))
     web_key = (
@@ -236,8 +317,52 @@ def section_geometry_prep_key(
     )
 
 
+def _as_section_layout(layout: LayoutInput) -> SectionLayout:
+    """Normalise catalogue specs to the parametric layout SoT."""
+    from blade_structure_utilities.geometry_utilities.section_geometry.sections.from_layout import (
+        as_section_layout,
+    )
+
+    return as_section_layout(layout)
+
+
+def _reattach_catalogue_preset(layout: SectionLayout) -> SectionLayout:
+    """Best-effort ``N{family}-{orient}`` preset re-attach after a parametric drop.
+
+    Returns a :class:`SectionLayout` whose ``catalogue_key`` matches the
+    registry entry when one exists; otherwise returns ``layout`` unchanged.
+    """
+    from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
+        resolve_system_type,
+    )
+
+    n = int(layout.n_webs)
+    fam = str(layout.structural_family or "").upper()
+    if not fam:
+        return layout
+    orient = "F" if str(layout.orientation) == "flapwise" else "CN"
+    key = f"{n}{fam}-{orient}"
+    try:
+        preset = resolve_system_type(key)
+    except KeyError:
+        return layout
+    # Preserve survivor stations / axes from the parametric drop; only
+    # re-attach the catalogue key and registry cap rule / orientation.
+    reattached = SectionLayout.from_system_layout_spec(preset)
+    return SectionLayout(
+        web_chord_fracs=layout.web_chord_fracs or reattached.web_chord_fracs,
+        orientation=reattached.orientation,
+        cap_placement=reattached.cap_placement,
+        catalogue_key=reattached.catalogue_key,
+        web_stations_m=layout.web_stations_m,
+        web_axes_m=layout.web_axes_m,
+        structural_family=reattached.structural_family,
+        flags=reattached.flags,
+    )
+
+
 def resolve_web_x_positions(
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     airfoil: AirfoilSDF,
     web_x_positions_m: Sequence[float] | None = None,
 ) -> list[float]:
@@ -251,38 +376,53 @@ def resolve_web_x_positions(
 
     Omitting it falls back to the legacy per-station form ``frac × local_chord``,
     under which every web shrinks with the section and none is ever dropped.
+    Absolute ``web_stations_m`` on a :class:`SectionLayout` win over fractions
+    when anchors are not supplied.
     """
     if web_x_positions_m is not None:
         return [float(x) for x in web_x_positions_m]
-    return [float(f) * float(airfoil.chord) for f in layout.web_chord_fracs]
+    if isinstance(layout, SectionLayout) and layout.web_stations_m is not None:
+        return [float(x) for x in layout.web_stations_m]
+    return [float(f) * float(airfoil.chord) for f in _layout_web_fracs(layout)]
 
 
 @dataclass(frozen=True)
 class StationLayoutResolution:
     """What a station actually builds, once webs that do not fit are dropped.
 
-    ``layout`` is the **effective** layout — the catalogue rung the surviving web
-    count maps to, which may differ in family from the nominal one (``2D`` hands
-    over to ``1C``). ``web_x_positions_m`` are the survivors, still at their
-    anchored offsets. ``web_y_coords`` are the matching ``(y_top, y_bot)`` pairs
-    from the same :func:`resolve_web_anchors` call — pass them into
+    ``layout`` and ``nominal_layout`` are always :class:`SectionLayout`
+    (catalogue :class:`SystemLayoutSpec` is normalised at resolve). For keyed
+    presets, survivors re-attach the matching ``N{family}-{orient}`` catalogue
+    key when one exists (``2D`` may hand over to ``1C``). For keyless layouts,
+    survivors stay parametric: ``N`` webs + :class:`CapPlacementRule`
+    (continuous box demotes to per-web pads when ``N < 2``).
+    ``web_x_positions_m`` are the survivors, still at their anchored offsets.
+    ``web_y_coords`` are the matching ``(y_top, y_bot)`` pairs from the same
+    :func:`resolve_web_anchors` call — pass them into
     :func:`build_section_geometry` so ``MultiCellSection`` does not re-resolve.
     ``dropped`` records each lost web with a reason.
     """
 
-    layout: SystemLayoutSpec
+    layout: SectionLayout
     web_x_positions_m: tuple[float, ...]
     dropped: tuple[DroppedWeb, ...]
-    nominal_layout: SystemLayoutSpec
+    nominal_layout: SectionLayout
     web_y_coords: tuple[tuple[float, float], ...] = ()
 
     @property
     def stepped_down(self) -> bool:
-        return self.layout.key != self.nominal_layout.key
+        eff = self.layout
+        nom = self.nominal_layout
+        return (
+            _layout_n_webs(eff) != _layout_n_webs(nom)
+            or eff.structural_family != nom.structural_family
+            or eff.cap_placement != nom.cap_placement
+            or eff.catalogue_key != nom.catalogue_key
+        )
 
 
 def resolve_station_layout(
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     airfoil: AirfoilSDF,
     *,
     skin_thickness: float | None = None,
@@ -293,27 +433,19 @@ def resolve_station_layout(
 ) -> StationLayoutResolution:
     """Resolve the layout a station can actually carry, before building anything.
 
-    Composes the two halves that already exist —
-    :func:`resolve_web_anchors` for which anchored webs the local cavity can hold,
-    and :func:`effective_layout_for_web_count` for the rung that count maps to.
+    One drop interpreter: survivors → parametric ``N`` webs +
+    :class:`CapPlacementRule` via :func:`_step_down_section_layout`. Catalogue
+    keys are presets — when the nominal layout carried a key, the effective
+    result is re-attached to the matching ``N{family}-{orient}`` registry entry
+    when one exists (so callers still see ``1C-F`` after a ``5D-F`` drop).
 
-    Deliberately cheap: it probes inner-skin intercepts rather than assembling
-    geometry, so the effective layout is known *before* the build and can drive
-    both the section and the design variables the sizing loop allocates.
-
-    ``min_cavity_depth_m`` forwards to :func:`resolve_web_anchors`: a web whose
-    local cavity is too shallow to build the family's minimum-gauge cap against
-    is dropped rather than anchored. Defaults to ``0.0`` (previous behaviour).
-
-    Raises :class:`InfeasibleSectionGeometry` when no web can be anchored — a
-    section with no shear path is an over-constrained station, not a rung of the
-    cascade. Callers must distinguish that from an ordinary too-thick trial.
+    Raises :class:`InfeasibleSectionGeometry` when no web can be anchored.
     """
     from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
         resolve_skin_thickness,
     )
     from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
-        effective_layout_for_web_count,
+        InfeasibleSectionGeometry,
     )
     from blade_structure_utilities.geometry_utilities.section_geometry.sections.web_layout import (
         resolve_web_anchors,
@@ -323,10 +455,17 @@ def resolve_station_layout(
         skin_thickness=skin_thickness, required=True
     )
 
+    wanted_preset = isinstance(layout, SystemLayoutSpec) or (
+        isinstance(layout, SectionLayout) and bool(layout.catalogue_key)
+    )
+    nominal_sl = _as_section_layout(layout)
+
     requested = resolve_web_x_positions(layout, airfoil, web_x_positions_m)
     if not requested:
         # Zero-web layouts (0A / 0B) are selected, never stepped into.
-        return StationLayoutResolution(layout, (), (), layout, web_y_coords=())
+        return StationLayoutResolution(
+            nominal_sl, (), (), nominal_sl, web_y_coords=()
+        )
 
     resolved, dropped = resolve_web_anchors(
         airfoil,
@@ -339,19 +478,32 @@ def resolve_station_layout(
     )
     survivors = tuple(float(a[0]) for a in resolved)
     y_coords = tuple((float(a[1]), float(a[2])) for a in resolved)
-    effective = effective_layout_for_web_count(layout, len(survivors))
+
+    if len(survivors) == 0 and _layout_n_webs(nominal_sl) > 0:
+        label = nominal_sl.catalogue_key or "SectionLayout"
+        raise InfeasibleSectionGeometry(
+            f"{label} cannot anchor a single web at this station. The "
+            "drop cascade floors at one web, because a section with no web "
+            "has no shear path; 0A/0B are selectable layouts, not degradation "
+            "targets. Report this station as over-constrained."
+        )
+
+    effective_sl = _step_down_section_layout(nominal_sl, len(survivors))
+    if wanted_preset:
+        effective_sl = _reattach_catalogue_preset(effective_sl)
+
     return StationLayoutResolution(
-        effective,
+        effective_sl,
         survivors,
         tuple(dropped),
-        layout,
+        nominal_sl,
         web_y_coords=y_coords,
     )
 
 
 def build_section_with_thicknesses(
     airfoil: AirfoilSDF,
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     *,
     twist_rad: float | None = None,
     twist_angle_rad: float | None = None,
@@ -367,8 +519,9 @@ def build_section_with_thicknesses(
 ) -> SectionMidlineHost:
     """Build sized implicit section geometry for a layout and free DVs.
 
-    Every catalogue key (including ``0A`` / ``0B``) builds a
-    :class:`MultiCellSection`. Prefer long thickness / twist names;
+    Accepts catalogue :class:`SystemLayoutSpec` or parametric
+    :class:`SectionLayout`. Every catalogue key (including ``0A`` / ``0B``)
+    builds a :class:`MultiCellSection`. Prefer long thickness / twist names;
     ``cap_height`` / ``web_thickness`` remain accepted aliases.
     """
     from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
@@ -409,7 +562,7 @@ def build_section_with_thicknesses(
 
 
 def build_section_geometry(
-    layout: SystemLayoutSpec,
+    layout: LayoutInput,
     airfoil: AirfoilSDF,
     *,
     skin_thickness: float | None = None,
@@ -429,6 +582,9 @@ def build_section_geometry(
     web_y_coords: Sequence[tuple[float, float]] | None = None,
 ) -> SectionGeometryResult:
     """Geometry worker entry: assemble section and emit gated carriers.
+
+    ``layout`` may be a catalogue :class:`SystemLayoutSpec` or a parametric
+    :class:`SectionLayout` (catalogue key optional).
 
     Parameters
     ----------
@@ -547,7 +703,7 @@ def build_section_geometry(
                 stage_s.get("properties_residual", 0.0)
             ) + float(properties_meta.residual_quadtree_s)
         for emit_key in (
-            "emit_laminates",
+            "emit_wall_solids",
             "emit_unions",
             "emit_cavity",
             "emit_cores",
@@ -583,14 +739,28 @@ def build_section_geometry(
                 n_cap_samples=int(n_cap_samples),
             )
         with timed_stage("topology", stage_s):
-            midline_strips = tuple(build_shell_strip_topology(raw, stage_sink=stage_s))
+            # Offset-locus interiors require the same frame as the strips.
+            # Midlines are emitted in B; the airfoil locus is authored in S —
+            # only share them when twist is ~0.
+            locus_af = airfoil if abs(float(twist_rad)) < 1e-10 else None
+            cap_depth = None
+            if locus_af is not None:
+                cap_depth = float(skin) + 0.5 * float(spar)
+            midline_strips = tuple(
+                build_shell_strip_topology(
+                    raw,
+                    stage_sink=stage_s,
+                    airfoil=locus_af,
+                    cap_mid_depth_m=cap_depth,
+                )
+            )
         if need_void:
-            from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops.void_cell_wall_loops import (
-                build_void_cell_wall_loops,
+            from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops.cell_wall_loops import (
+                build_cell_wall_loops,
             )
 
             with timed_stage("cell_wall_loops", stage_s):
-                cell_wall_loops = tuple(build_void_cell_wall_loops(midline_strips))
+                cell_wall_loops = tuple(build_cell_wall_loops(midline_strips))
 
         chord_m = float(airfoil.chord or 1.0)
         twist_out = float(twist_rad)
@@ -637,6 +807,7 @@ def build_section_geometry(
 __all__ = [
     "ALL_OUTPUT_GATES",
     "DroppedWeb",
+    "LayoutInput",
     "OutputGate",
     "SectionGeometryResult",
     "SectionPropertiesMeta",

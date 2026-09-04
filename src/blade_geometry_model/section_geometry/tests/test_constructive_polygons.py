@@ -1,4 +1,4 @@
-"""Unit tests for constructive laminate polygons and shoelace properties."""
+"""Unit tests for constructive wall-solid polygons and shoelace properties."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from blade_structure_utilities.geometry_utilities.section_geometry.api.factory i
 from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
     classify_property_labels,
     emit_constructive_polygons,
-    emit_laminate_polygons,
+    emit_wall_solid_polygons,
     is_constructive_label,
     is_core_label,
-    is_laminate_label,
+    is_wall_solid_label,
     is_residual_label,
     section_properties_from_polygons,
 )
@@ -33,7 +33,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil i
 from blade_structure_utilities.integration_utilities.shoelace_integration import section_properties_S
 
 
-def test_label_classifier_cores_constructive_inserts_residual():
+def test_label_classifier_cores_and_inserts_constructive():
     constructive, res = classify_property_labels(
         [
             "skin_suction_surface",
@@ -49,12 +49,14 @@ def test_label_classifier_cores_constructive_inserts_residual():
     assert "shear_web_0" in constructive
     assert "sandwich_core_0" in constructive and is_core_label("sandwich_core_0")
     assert is_constructive_label("sandwich_core_1")
-    assert "leading_edge_insert" in res and "trailing_edge_insert" in res
-    assert is_residual_label("leading_edge_insert")
+    assert "leading_edge_insert" in constructive and "trailing_edge_insert" in constructive
+    assert not is_residual_label("leading_edge_insert")
     assert not is_residual_label("sandwich_core_0")
-    assert is_laminate_label("spar_cap_pressure_surface")
-    assert is_laminate_label("skin_suction_surface")
-    assert not is_laminate_label("sandwich_core_1")
+    assert is_wall_solid_label("spar_cap_pressure_surface")
+    assert is_wall_solid_label("skin_suction_surface")
+    assert is_wall_solid_label("leading_edge_insert")
+    assert not is_wall_solid_label("sandwich_core_1")
+    assert res == []
 
 
 def test_section_properties_from_polygons_matches_shoelace_rectangle():
@@ -83,10 +85,10 @@ def test_outer_skin_annulus_positive_area():
     assert a_ss > 0.0 and a_ps > 0.0
 
 
-def test_emit_laminate_polygons_2d_cn():
+def test_emit_wall_solid_polygons_2d_cn():
     airfoil = AirfoilSDF.from_naca("2412", n_points=100, chord=1.0)
     section = build_section_view(airfoil, resolve_system_type("2D-CN"), twist_angle_rad=0.0)
-    polys = emit_laminate_polygons(section)
+    polys = emit_wall_solid_polygons(section)
     assert "skin_suction_surface" in polys and "skin_pressure_surface" in polys
     assert any(k.startswith("shear_web_") for k in polys)
     assert "spar_cap_suction_surface" in polys and "spar_cap_pressure_surface" in polys
@@ -94,13 +96,13 @@ def test_emit_laminate_polygons_2d_cn():
         assert p.area > 0.0
 
 
-def test_twist_preserves_laminate_area():
+def test_twist_preserves_wall_solid_area():
     airfoil = AirfoilSDF.from_naca("2412", n_points=100, chord=1.0)
     layout = resolve_system_type("2D-CN")
     s0 = build_section_view(airfoil, layout, twist_angle_rad=0.0)
     s15 = build_section_view(airfoil, layout, twist_angle_rad=float(np.deg2rad(15.0)))
-    p0 = emit_laminate_polygons(s0)
-    p15 = emit_laminate_polygons(s15)
+    p0 = emit_wall_solid_polygons(s0)
+    p15 = emit_wall_solid_polygons(s15)
     for key in p0:
         np.testing.assert_allclose(p15[key].area, p0[key].area, rtol=1e-3, atol=1e-5)
 
@@ -153,7 +155,7 @@ def test_section_properties_from_polygons_handles_degenerate():
 
 
 def test_hybrid_5d_f_thick_skin_does_not_crash():
-    """Heavy laminate thicknesses (FoS-thickened geometry) must stay on hybrid path."""
+    """Heavy wall thicknesses (FoS-thickened geometry) must stay on hybrid path."""
     from blade_structure_utilities.geometry_utilities.section_geometry.sections import (
         MultiCellSection,
     )
@@ -194,7 +196,7 @@ def test_hybrid_retains_core_and_optional_inserts():
     airfoil = AirfoilSDF.from_naca("2412", n_points=100, chord=1.0)
     # MultiCellSection via build_section_view; enable inserts through factory if available.
     section = build_section_view(airfoil, resolve_system_type("2D-CN"), twist_angle_rad=0.0)
-    # Direct MultiCellSection with inserts for residual coverage
+    # Direct MultiCellSection with inserts for constructive coverage
     from blade_structure_utilities.geometry_utilities.section_geometry.sections.multicell import (
         MultiCellSection,
     )
@@ -211,14 +213,17 @@ def test_hybrid_retains_core_and_optional_inserts():
     constructive, res = classify_property_labels(mcs.labels)
     assert any(k.startswith("sandwich_core_") for k in constructive)
     assert not any(k.startswith("sandwich_core_") for k in res)
-    assert "leading_edge_insert" in res and "trailing_edge_insert" in res
+    assert "leading_edge_insert" in constructive and "trailing_edge_insert" in constructive
+    assert "leading_edge_insert" not in res and "trailing_edge_insert" not in res
     spec = quadtree_spec_for_airfoil(airfoil, chord=1.0, max_depth=6, max_cells=80000)
     props, meta = compute_section_properties(
         mcs, backend="hybrid", quadtree_spec=spec, airfoil_for_spec=airfoil
     )
     assert meta["backend"] == "hybrid"
-    assert "leading_edge_insert" in meta["residual_labels"]
-    assert "trailing_edge_insert" in meta["residual_labels"]
+    assert "leading_edge_insert" not in meta["residual_labels"]
+    assert "trailing_edge_insert" not in meta["residual_labels"]
+    assert "leading_edge_insert" in meta["constructive_labels"]
+    assert "trailing_edge_insert" in meta["constructive_labels"]
     assert any(
         k.startswith("sandwich_core_")
         for k in meta["constructive_labels"]

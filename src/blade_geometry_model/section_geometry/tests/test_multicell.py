@@ -12,11 +12,11 @@ from blade_structure_utilities.geometry_utilities.section_geometry import (
     MultiCellSection,
     SDFGrid,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.sections import SparCap
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir import SparCap
 from blade_structure_utilities.geometry_utilities.section_geometry.sdf import offset
 from blade_structure_utilities.geometry_utilities.section_geometry.layout.thickness_limits import (
-    MIN_REALISTIC_SKIN_LAMINATE_THICKNESS_M,
-    MIN_REALISTIC_SPAR_LAMINATE_THICKNESS_M,
+    MIN_REALISTIC_SKIN_WALL_THICKNESS_M,
+    MIN_REALISTIC_SPAR_WALL_THICKNESS_M,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.visualisation.plot import _DEFAULT_COLOR, _component_color
 
@@ -105,7 +105,7 @@ class TestSparCapCurvature:
         np.testing.assert_allclose(thicknesses, cap_h, atol=0.003)
 
     def test_cap_inside_airfoil(self, af, grid):
-        """Cap laminate lies in the cavity (airfoil interior past the inner mold).
+        """Cap wall solid lies in the cavity (airfoil interior past the inner mold).
 
         Inner mold is at phi_af ≈ -skin_t/2; cavity points have phi_af < -skin_t/2.
         """
@@ -126,24 +126,24 @@ class TestSparCapCurvature:
 # ---------------------------------------------------------------------------
 
 class TestMultiCellTopology:
-    def test_laminate_thickness_minimum_clamp(self, af):
+    def test_wall_thickness_minimum_clamp(self, af):
         mcs = MultiCellSection(
             af,
             web_x_positions=[0.25, 0.5],
             skin_thickness=0.0005,
             web_thickness=0.0005,
         )
-        assert mcs._skin_t == pytest.approx(MIN_REALISTIC_SKIN_LAMINATE_THICKNESS_M)
+        assert mcs._skin_t == pytest.approx(MIN_REALISTIC_SKIN_WALL_THICKNESS_M)
 
     def test_spar_cap_height_clamp_matches_minimum_reference(self, af, grid):
-        """Sub-millimetre cap_height is raised to the spar laminate floor; SDF matches explicit minimum."""
+        """Sub-millimetre cap_height is raised to the spar wall thickness floor; SDF matches explicit minimum."""
         m_tiny = MultiCellSection.twin_web(
             af, skin_thickness=0.003, cap_height=1e-5, web_thickness=0.004
         )
         m_ref = MultiCellSection.twin_web(
             af,
             skin_thickness=0.003,
-            cap_height=MIN_REALISTIC_SPAR_LAMINATE_THICKNESS_M,
+            cap_height=MIN_REALISTIC_SPAR_WALL_THICKNESS_M,
             web_thickness=0.004,
         )
         p0 = grid.eval(m_tiny["spar_cap_suction_surface"])
@@ -233,7 +233,7 @@ class TestMultiCellTopology:
                 f"{label}: insert still closer to mid-surface than inner skin "
                 f"(|phi_inner|={median_inner:.4g}, |phi_mid|={median_mid:.4g})"
             )
-            # Insert solid must not invade the skin laminate band (-t < phi_af < 0
+            # Insert solid must not invade the skin wall band (-t < phi_af < 0
             # is outside the cavity; require interior samples stay in cavity).
             interior = phi_ins < -0.1 * skin_t
             assert interior.any(), f"{label}: no clear interior"

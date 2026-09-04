@@ -113,7 +113,7 @@ def test_stage_timings_attached_when_profiling_enabled(monkeypatch):
     assert "properties" in result.stage_timings
     assert "properties_constructive" in result.stage_timings
     assert "properties_residual" in result.stage_timings
-    assert "emit_laminates" in result.stage_timings
+    assert "emit_wall_solids" in result.stage_timings
     assert "emit_unions" in result.stage_timings
     assert "emit_cavity" in result.stage_timings
     assert "emit_cores" in result.stage_timings
@@ -124,7 +124,7 @@ def test_stage_timings_attached_when_profiling_enabled(monkeypatch):
     assert result.stage_timings["properties"] >= 0.0
     assert result.stage_timings["properties_constructive"] >= 0.0
     assert result.stage_timings["properties_residual"] >= 0.0
-    assert result.stage_timings["emit_laminates"] >= 0.0
+    assert result.stage_timings["emit_wall_solids"] >= 0.0
     assert result.stage_timings["properties_shoelace"] >= 0.0
 
 

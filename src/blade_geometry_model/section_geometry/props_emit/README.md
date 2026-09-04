@@ -4,8 +4,9 @@
 
 When `outputs` includes `"properties"`, builds `properties_map`: per-region
 2-D mass properties (area, centroid, second moments). Default backend is
-**hybrid** (constructive polygons for mature labels; adaptive SDF sampling for
-residual inserts). Beam `EA` / `EI` / `GJ` belong to
+**hybrid** (constructive polygons for mature labels including LE/TE inserts;
+adaptive SDF sampling only for any remaining residual labels). Beam `EA` /
+`EI` / `GJ` belong to
 [`section_properties`](../../section_properties/README.md).
 
 ## Table of contents
@@ -54,8 +55,10 @@ flowchart LR
 ```
 
 Called from `build_section_geometry` when `"properties"` is gated; stored on
-`SectionGeometryResult.properties_map`. Moments are in the solids’ frame as
-built — do not re-twist the map after emit twist.
+`SectionGeometryResult.properties_map`. Moments and centroids are in the
+solids’ **authoring frame as built** (with host twist: LE-origin rotated-NACA).
+That is **not** frame **B** (`twisted_pitch_axis_blade_frame`); do not silently
+re-twist the map to match emit midlines.
 
 ## See also
 

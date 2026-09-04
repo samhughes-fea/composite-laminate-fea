@@ -160,4 +160,4 @@ Gated midlines emit twisted `ShellMidlineStrip` polylines. Prefer
 
 - Cap placement is not from shear-centre or elastic-axis coordinates.
 - Max-thickness anchor uses sampled `thickness_distribution` only.
-- `0A` / `0B` are zero-web hosts without multicell shell-mesh junctions.
+- `0A` / `0B` are zero-web hosts: skin ± caps midlines hand off without web junctions.

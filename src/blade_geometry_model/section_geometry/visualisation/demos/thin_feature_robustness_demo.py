@@ -57,7 +57,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.ar
     section_properties_via_quadtree,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
-    emit_laminate_polygons,
+    emit_wall_solid_polygons,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.props_backend import (
     quadtree_spec_for_airfoil,
@@ -75,7 +75,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.props_emit.pr
 from blade_structure_utilities.mesh_utilities.area_2d.quadrature import label_boundary_segments
 
 _DPI = DEFAULT_DPI
-# Floor is MIN_REALISTIC_WEB_LAMINATE_THICKNESS_M (4 mm); request that minimum.
+# Floor is MIN_REALISTIC_WEB_WALL_THICKNESS_M (4 mm); request that minimum.
 _WEB_T = 0.004
 _DEPTHS = (4, 5, 6, 7, 8)
 
@@ -96,7 +96,7 @@ def _build_section(af: AirfoilSDF, *, twist_rad: float) -> MultiCellSection:
 
 
 def _constructive_web_area(section: MultiCellSection) -> float:
-    polys = emit_laminate_polygons(section)
+    polys = emit_wall_solid_polygons(section)
     geom = polys.get("shear_web_0")
     if geom is None or geom.is_empty:
         return 0.0
@@ -104,7 +104,7 @@ def _constructive_web_area(section: MultiCellSection) -> float:
 
 
 def _web_centroid(section: MultiCellSection) -> np.ndarray:
-    polys = emit_laminate_polygons(section)
+    polys = emit_wall_solid_polygons(section)
     geom = polys["shear_web_0"]
     c = geom.centroid
     return np.array([float(c.x), float(c.y)], dtype=float)
@@ -264,7 +264,7 @@ def main(argv: list[str] | None = None) -> Path:
     _save_fig(fig, out_dir / "thin_web_zoom_twist.png")
 
     # Depth sweep at 0° twist — clean QT ↔ constructive convergence on the
-    # same laminate. Zoom panels above still show the web under 15° twist.
+    # same wall solid. Zoom panels above still show the web under 15° twist.
     section = _build_section(af, twist_rad=0.0)
     a_c = _constructive_web_area(section)
     depth_rows: list[dict] = []

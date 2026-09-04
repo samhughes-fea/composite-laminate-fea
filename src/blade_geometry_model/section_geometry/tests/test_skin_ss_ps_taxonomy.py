@@ -9,7 +9,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry import (
     MultiCellSection,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.constructive import (
-    emit_laminate_polygons,
+    emit_wall_solid_polygons,
     is_skin_label,
 )
 from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shell_midline_export import (
@@ -18,10 +18,10 @@ from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shel
 from blade_structure_utilities.geometry_utilities.section_geometry.topology.shell_strip_topology import (
     build_shell_strip_topology,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops.void_cell_wall_loops import (
-    build_void_cell_wall_loops,
+from blade_structure_utilities.geometry_utilities.section_geometry.cell_wall_loops.cell_wall_loops import (
+    build_cell_wall_loops,
 )
-from blade_structure_utilities.geometry_utilities.section_geometry.sections.components.outer_skin import (
+from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.outer_skin import (
     OuterSkin,
 )
 
@@ -49,7 +49,7 @@ def test_ss_ps_skin_areas_sum_near_full_annulus():
         structural_family="D",
         core_enabled=False,
     )
-    polys = emit_laminate_polygons(sec)
+    polys = emit_wall_solid_polygons(sec)
     a_ss = float(polys["skin_suction_surface"].area)
     a_ps = float(polys["skin_pressure_surface"].area)
     a_full = float(emit_outer_skin_polygon(full).area)
@@ -73,7 +73,7 @@ def test_twin_web_hierarchical_skin_arcs():
     assert len(raw_skins) == 2
     # Asserted on the *raw* strips, which is now a guarantee the emit stage makes
     # rather than one `_ensure_ss_ps_skins` supplies a stage later. An SS/PS
-    # half-ring is an open arc, so `closed` must be False here too — it used to be
+    # half-ring is an open arc, so `closed` must be False here too â€” it used to be
     # True on both and was corrected downstream.
     assert {s.skin_side for s in raw_skins} == {"suction_surface", "pressure_surface"}
     assert all(not s.closed for s in raw_skins)
@@ -81,7 +81,7 @@ def test_twin_web_hierarchical_skin_arcs():
     topo = build_shell_strip_topology(raw)
     skins = [s for s in topo if s.kind == "skin"]
     assert {s.skin_side for s in skins} == {"suction_surface", "pressure_surface"}
-    # Twin-web: LE + bay_0 + TE per side → 6 strips
+    # Twin-web: LE + bay_0 + TE per side â†’ 6 strips
     assert len(skins) == 6
     labels = {s.label for s in skins}
     assert "skin_suction_surface:leading_edge" in labels
@@ -98,5 +98,6 @@ def test_twin_web_hierarchical_skin_arcs():
         else:
             assert s.bay_index is None
 
-    loops = build_void_cell_wall_loops(topo)
+    loops = build_cell_wall_loops(topo)
     assert len(loops) == 3
+

@@ -9,9 +9,9 @@ from numpy.typing import NDArray
 
 from blade_structure_utilities.geometry_utilities.section_contract.shell_midline_strip import ShellMidlineStrip
 
+from ..midlines.junction_primitives import solve_interior_cap_web_hits
 from ..midlines.ring_geometry import (
     _MIN_SEGMENT_LENGTH_M,
-    intersect_web_axis_open_polyline_2d,
     open_polyline_min_segment_length,
     open_polyline_prefix_lengths,
 )
@@ -73,14 +73,17 @@ def insert_cap_web_interior_junctions(
     merge_arc_m: float | None = None,
     min_seg_m: float | None = None,
     foot_proximity_tol_m: float = 0.0,
+    airfoil=None,
+    cap_mid_depth_m: float | None = None,
 ) -> tuple[ShellMidlineStrip, ...]:
     """Give cap **and** web a shared node at every interior cap-web T-junction.
 
-    (1) Solve each interior crossing as **web axis × final cap polyline**
-    (:func:`intersect_web_axis_open_polyline_2d`, SG-009). Each hit is solved
-    once and the *same* point is inserted into both strips, so the junction is
-    conformal by construction rather than by the mesher clustering two nearby
-    nodes.
+    (1) Solve each interior crossing via
+    :func:`midlines.junction_primitives.solve_interior_cap_web_hits` —
+    preferably axis × offset locus at ``cap_mid_depth_m`` when ``airfoil`` is
+    supplied (same frame as the strips), otherwise web axis × final cap
+    polyline (SG-009 / SG-008 discrete locus). Each hit is solved once and the
+    *same* point is inserted into both strips.
     (2) Optional **proximity** to each shear-web **foot** (endpoint on skin): when
     enabled (``foot_proximity_tol_m > 0``) and the foot is within tolerance of the
     cap polyline, insert the foot ``yz`` as a new vertex. Cap-side only — the foot
@@ -153,7 +156,13 @@ def insert_cap_web_interior_junctions(
         n = int(pts.shape[0])
         seg_lens = np.linalg.norm(np.diff(pts, axis=0), axis=1)
         for w, w_idx in zip(web_pts, web_strip_index, strict=True):
-            for i, j, ta, tb, p_hit in intersect_web_axis_open_polyline_2d(w, pts):
+            for i, j, ta, tb, p_hit in solve_interior_cap_web_hits(
+                w,
+                pts,
+                airfoil=airfoil,
+                depth=cap_mid_depth_m,
+                on_cap_tol_m=max(vertex_coincide_tol_m, 1e-6),
+            ):
                 seg_len = float(seg_lens[i])
                 if seg_len < min_seg:
                     continue

@@ -18,6 +18,7 @@ Run from the repository root::
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/structural_family_grids_demo.py
     python .../structural_family_grids_demo.py --twist-deg 15 --families A D
     python .../structural_family_grids_demo.py --keys 2D-F 3D-CN
+    python .../structural_family_grids_demo.py --wall
 """
 
 from __future__ import annotations
@@ -146,6 +147,65 @@ def _render_system(
     }
 
 
+
+def _compose_contact_sheet(
+    systems: list[dict[str, Any]],
+    *,
+    out_dir: Path,
+    presentation: bool = False,
+    columns: int = 8,
+) -> Path:
+    """Tile per-key PNGs into one labelled contact sheet."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    if not systems:
+        raise SystemExit("No systems to compose into a wall.")
+
+    images: list[tuple[str, Image.Image]] = []
+    for row in systems:
+        png_path = out_dir / str(row["png"])
+        if not png_path.is_file():
+            raise SystemExit(f"Missing tile for wall: {png_path}")
+        images.append((str(row["key"]), Image.open(png_path).convert("RGB")))
+
+    tile_width, tile_height = images[0][1].size
+    label_band = 36
+    columns = max(1, int(columns))
+    rows = (len(images) + columns - 1) // columns
+    sheet = Image.new(
+        "RGB",
+        (columns * tile_width, rows * (tile_height + label_band)),
+        color=(255, 255, 255),
+    )
+    draw = ImageDraw.Draw(sheet)
+    try:
+        font = ImageFont.truetype("arial.ttf", 18)
+    except OSError:
+        font = ImageFont.load_default()
+
+    for index, (key, image) in enumerate(images):
+        row_index = index // columns
+        col_index = index % columns
+        x0 = col_index * tile_width
+        y0 = row_index * (tile_height + label_band)
+        sheet.paste(image, (x0, y0))
+        draw.rectangle(
+            (x0, y0 + tile_height, x0 + tile_width, y0 + tile_height + label_band),
+            fill=(245, 247, 250),
+        )
+        draw.text(
+            (x0 + 10, y0 + tile_height + 8),
+            key,
+            fill=(20, 30, 40),
+            font=font,
+        )
+
+    out_path = out_dir / "structural_family_wall.png"
+    sheet.save(out_path, dpi=(220 if presentation else 200, 220 if presentation else 200))
+    print(f"Wrote {out_path}")
+    return out_path
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     add_output_and_presentation_args(p, default_stem="structural_family_grids")
@@ -163,6 +223,17 @@ def main(argv: list[str] | None = None) -> int:
         nargs="*",
         default=None,
         help="Explicit SystemType keys (overrides --families when set).",
+    )
+    p.add_argument(
+        "--wall",
+        action="store_true",
+        help="Also compose all rendered keys into structural_family_wall.png.",
+    )
+    p.add_argument(
+        "--wall-columns",
+        type=int,
+        default=8,
+        help="Column count for --wall contact sheet.",
     )
     args = p.parse_args(argv)
     apply_presentation_style(bool(args.presentation))
@@ -222,6 +293,15 @@ def main(argv: list[str] | None = None) -> int:
             "Skin-only 0A/0B have no flapwise twin."
         ),
     }
+
+    if bool(args.wall):
+        wall_path = _compose_contact_sheet(
+            systems,
+            out_dir=out_dir,
+            presentation=bool(args.presentation),
+            columns=int(args.wall_columns),
+        )
+        payload["wall_png"] = wall_path.name
     json_path = out_dir / "structural_family_grids.json"
     json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print(f"Wrote {json_path} ({len(systems)} systems)")

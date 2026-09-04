@@ -1,4 +1,4 @@
-﻿"""
+"""
 visualisation/demos/robustness_monte_carlo_demo.py
 =======================================
 Randomized robustness sweep for implicit section geometry.
