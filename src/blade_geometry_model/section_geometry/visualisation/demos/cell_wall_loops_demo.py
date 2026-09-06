@@ -1,15 +1,15 @@
 """
 visualisation/demos/cell_wall_loops_demo.py
 =====================================
-Plot constructive void-cell wall loops on NACA midlines (0â€¦5 webs).
+Plot constructive cell-wall loops on NACA midlines (0…5 webs).
 
 Builds ``MultiCellSection``, exports B-frame midline strips, then
 ``build_cell_wall_loops``. Writes **one PNG per case** (no subplot grids):
 
-* ``cell_wall_loops_{name}.png`` â€” filled cell loops over midlines (family A)
-* ``cell_wall_loops_on_section_{name}.png`` â€” structural ``plot_section``
-  with component midlines + void-cell wall loops as thin dashed centreline rings
-* ``cell_wall_loops.json`` â€” serializable strips + loops for all cases
+* ``cell_wall_loops_{name}.png`` — filled cell loops over midlines (family A)
+* ``cell_wall_loops_on_section_{name}.png`` — structural ``plot_section``
+  with wall midlines + cell-wall loops as thin dashed centreline rings
+* ``cell_wall_loops.json`` — serializable strips + loops for all cases
 
 Run from the repository root::
 
@@ -387,8 +387,8 @@ def main(argv: list[str] | None = None) -> Path:
             strips_d,
             loops_d,
             title=(
-                f"Section geometry + void-cell wall loops â€” {name}  "
-                f"(NACA 2412, family {fam}, {n_webs} web(s) â†’ {len(loops_d)} loop(s))"
+                f"Section geometry + cell-wall loops — {name}  "
+                f"(NACA 2412, family {fam}, {n_webs} web(s) → {len(loops_d)} loop(s))"
             ),
         )
         _save_fig(fig2, out_dir / f"cell_wall_loops_on_section_{name}.png", presentation=presentation)

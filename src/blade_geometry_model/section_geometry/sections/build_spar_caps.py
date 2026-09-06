@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
+
 from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
     CapWall,
 )
@@ -21,12 +23,13 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import
 from ..layout.cap_placement import CapPlacementRule
 from ..layout.section_axes import max_thickness_chord_x, pitch_axis_x_from_le
 from .cap_feasibility import cap_feasibility_clamp
+from .cap_ply_snap import snap_cap_heights
 from .clip_algebra import _parallel_web_strip_clip, web_station_projection
 from blade_structure_utilities.geometry_utilities.section_geometry.recipes.sdf_ir.spar_cap import (
     SparCap,
 )
 from .labels import ComponentLabel
-from .web_layout import inner_y_at_x, inner_y_at_xs
+from .web_layout import inner_y_at_x
 
 
 def _label_str(label: Any) -> str:
@@ -68,6 +71,16 @@ def _wrap_expr_cap(base_cap: SparCap, expr: Expr) -> SparCap:
     return out
 
 
+def _camber_xy_tuple(camber_xy) -> tuple[tuple[float, float], ...] | None:
+    """Freeze feasibility camber samples for CapWall (hashable recipe field)."""
+    if camber_xy is None:
+        return None
+    arr = np.asarray(camber_xy, dtype=float)
+    if arr.ndim != 2 or arr.shape[0] < 2 or arr.shape[1] < 2:
+        return None
+    return tuple((float(x), float(y)) for x, y in arr[:, :2])
+
+
 def _cap_wall(
     *,
     skin_thickness: float,
@@ -77,6 +90,7 @@ def _cap_wall(
     surface: str,
     twist_angle: float = 0.0,
     fw: dict[str, Any] | None = None,
+    camber_xy=None,
 ) -> CapWall:
     fw = fw or {}
     return CapWall(
@@ -91,6 +105,7 @@ def _cap_wall(
         flapwise_c_lo=fw.get("flapwise_c_lo"),
         flapwise_c_hi=fw.get("flapwise_c_hi"),
         flapwise_clip_mode=fw.get("flapwise_clip_mode"),
+        camber_xy=_camber_xy_tuple(camber_xy),
     )
 
 
@@ -131,11 +146,17 @@ def build_spar_caps(
     dhw: float,
     y_search,
     phi_inner_ref,
+    spar_cap_ply_pitch_m: float | None = None,
 ) -> tuple[Any | None, Any | None, dict[str, Any], dict[str, CapWall]]:
     """Return (cap_upper, cap_lower, unrotated_SparCap, CapWall recipes).
 
     CapWall recipes are authored first from :class:`CapPlacementRule`; SDF
     components are projections. Family letters are not accepted here.
+
+    ``spar_cap_ply_pitch_m`` (optional): after cavity feasibility reduces a
+    continuous height, floor onto this pitch so CapWall / midline thickness
+    stays on the ply pitch grid (BL-019). Geometry remains material-agnostic —
+    callers pass the catalogue spar-cap ``PlyGrid.pitch`` when known.
     """
     rule = cap_placement
 
@@ -169,25 +190,16 @@ def build_spar_caps(
                 aft_half_depth_rule=True,
             )
         )
+        cap_h_upper, cap_h_lower = snap_cap_heights(
+            cap_h_upper, cap_h_lower, spar_cap_ply_pitch_m
+        )
         cap_strip = None
         cap_fw: dict[str, Any] = {}
         if all_flapwise and c_station is not None:
-            probes = inner_y_at_xs(
-                airfoil_sdf,
-                skin_thickness,
-                [float(x_cap_start), float(x_cap_end)],
-                y_search=y_search,
-                phi_inner=phi_inner_ref,
-                raise_on_miss=False,
-            )
-            cys = []
-            for xq, pair in zip((x_cap_start, x_cap_end), probes):
-                if pair is None:
-                    cys.append(0.0)
-                else:
-                    cys.append(0.5 * (float(pair[0]) + float(pair[1])))
-            c_lo_cap = web_station_projection(nx, ny, float(x_cap_start), cys[0])
-            c_hi_cap = web_station_projection(nx, ny, float(x_cap_end), cys[1])
+            # Web midplane stations are the strip SoT (same as sandwich cores).
+            # Do not recompute from camber at x_cap — that drifts under twist (SG-011).
+            c_lo_cap = float(c_station[0])
+            c_hi_cap = float(c_station[-1])
             d_stat = abs(c_lo_cap - c_hi_cap)
             chord_scale = float(getattr(airfoil_sdf, "chord", 1.0))
             if d_stat > 1e-9 * max(chord_scale, 1e-9):
@@ -201,6 +213,7 @@ def build_spar_caps(
             cap_height=cap_h_upper,
             surface="suction_surface",
             fw=cap_fw,
+            camber_xy=_camber,
         )
         wall_l = _cap_wall(
             skin_thickness=skin_thickness,
@@ -209,6 +222,7 @@ def build_spar_caps(
             cap_height=cap_h_lower,
             surface="pressure_surface",
             fw=cap_fw,
+            camber_xy=_camber,
         )
         recipes[_label_str(ComponentLabel.SPAR_CAP_SUCTION_SURFACE)] = wall_u
         recipes[_label_str(ComponentLabel.SPAR_CAP_PRESSURE_SURFACE)] = wall_l
@@ -251,6 +265,9 @@ def build_spar_caps(
             phi_inner_ref=phi_inner_ref,
             aft_half_depth_rule=False,
         )
+        cap_h_upper, cap_h_lower = snap_cap_heights(
+            cap_h_upper, cap_h_lower, spar_cap_ply_pitch_m
+        )
         _camber_b = _clamp_b.get("camber_xy")
         strip_b = None
         strip_b_fw: dict[str, Any] = {}
@@ -274,6 +291,7 @@ def build_spar_caps(
             cap_height=cap_h_upper,
             surface="suction_surface",
             fw=strip_b_fw,
+            camber_xy=_camber_b,
         )
         wall_l = _cap_wall(
             skin_thickness=skin_thickness,
@@ -282,6 +300,7 @@ def build_spar_caps(
             cap_height=cap_h_lower,
             surface="pressure_surface",
             fw=strip_b_fw,
+            camber_xy=_camber_b,
         )
         recipes[_label_str(ComponentLabel.SPAR_CAP_SUCTION_SURFACE)] = wall_u
         recipes[_label_str(ComponentLabel.SPAR_CAP_PRESSURE_SURFACE)] = wall_l
@@ -327,6 +346,9 @@ def build_spar_caps(
         if _clamped_c:
             cap_h_upper = min(float(c[2]) for c in _clamped_c)
             cap_h_lower = min(float(c[3]) for c in _clamped_c)
+        cap_h_upper, cap_h_lower = snap_cap_heights(
+            cap_h_upper, cap_h_lower, spar_cap_ply_pitch_m
+        )
 
         caps_u = []
         caps_l = []
@@ -348,6 +370,7 @@ def build_spar_caps(
                 cap_height=cap_h_upper,
                 surface="suction_surface",
                 fw=strip_c_fw,
+                camber_xy=_camber_c,
             )
             wall_l = _cap_wall(
                 skin_thickness=skin_thickness,
@@ -356,6 +379,7 @@ def build_spar_caps(
                 cap_height=cap_h_lower,
                 surface="pressure_surface",
                 fw=strip_c_fw,
+                camber_xy=_camber_c,
             )
             recipes[f"spar_cap_suction_surface_{i}"] = wall_u
             recipes[f"spar_cap_pressure_surface_{i}"] = wall_l

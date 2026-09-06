@@ -36,10 +36,12 @@ Deviations are stated per entry.
 | [SG-008](#sg-008) | Airfoil polygonisation is the package's real exactness floor, and is un-budgeted | **Closed** — polygon *is* the section; documented |
 | [SG-009](#sg-009) | Junction detection reads sampled polylines, so exactness fights detectability | **Fixed** — post-resample web-axis × final-cap solve |
 | [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Fixed** — `n_samples` derived from a 1 µm solid-clip budget |
+| [SG-011](#sg-011) | Family-D continuous-box spar caps leave a bay gap against flapwise webs under twist | **Fixed** — CapWall flapwise strip + `c_station` SoT |
+| [SG-012](#sg-012) | Constructive CapWall solids split suction/pressure on `y=0`, not cavity midline | **Fixed** — store `camber_xy` on CapWall recipes |
 
 ## Standing invariant (established 2026-08-30)
 
-**A component must emit its mid-surface at its true extent, so junctions
+**A wall must emit its mid-surface at its true extent, so junctions
 coincide by construction. Topology splits and indexes; it never relocates.**
 
 SG-001 through SG-004 were one failure of this: a strip emitted short or in the
@@ -847,3 +849,123 @@ chord-approximation deviation stays within
 `CAMBER_CLIP_DEV_BUDGET_M = 1e-6` (1 µm) — well below the ~62 µm LE polygon
 floor. Callers may still pass an explicit `n_samples`. Feasibility clamping
 behaviour is unchanged; only the clip polyline densifies.
+
+## SG-011
+
+**Family-D continuous-box spar caps leave a bay gap against flapwise webs under twist**
+
+**Status:** Fixed
+**Found:** 2026-09-06
+**Fixed:** 2026-09-06
+**Area:** `recipes/sdf_ir/spar_cap.py`, `constructive/emitters.py::emit_spar_cap_polygon`,
+`sections/build_spar_caps.py` (`continuous_box`)
+
+### Symptom
+
+On `2D-F` with non-zero twist (e.g. section-selection e2e st018, twist ~11°),
+constructive wall solids and shell midlines show spar caps floating inside the
+box bay — several millimetres clear of one or both shear webs. At twist = 0°
+the same gauges look flush.
+
+### Evidence
+
+NACA 2412, chord 1 m, skin 3 mm / spar 11.625 mm / web 4 mm, layout `2D-F`:
+
+| Twist | Solid cap–web gap | Midline end → web mid-surface |
+|---|---|---|
+| 0° | 0.000 mm | 0.000 mm |
+| ~11° (pre-fix) | ~5 mm (one side per cap) | ~8–9 mm |
+
+CapWall already stored `flapwise_nx/ny/c_lo/c_hi`, but recipe emission ignored
+them unless `_strip_clip` was attached. CapWall never passes `_strip_clip`, so
+`SparCap` IR and `emit_spar_cap_polygon` fell back to `ChordBand(x_start, x_end)`.
+At θ = 0, `n = (-1, 0)` so ChordBand coincides with web midplanes; under twist
+the webs sit on slanted `c_station` planes and the chordwise band drifts.
+
+Secondary: `continuous_box` recomputed strip bounds from camber at `x_cap`
+instead of using assemble SoT `c_station[0]/[-1]` (what sandwich cores already use).
+
+### Root cause
+
+Flapwise strip parameters on CapWall were documentation for the Shapely path but
+were not applied unless an explicit `_strip_clip` callable was present. Recipe-
+driven solids, properties, and midlines therefore stayed chordwise under twist.
+
+### Fix
+
+1. `SparCap.__init__` derives `_strip_clip` from `flapwise_*` when missing and
+   builds the IR clip from that strip (midlines inherit the same `_strip_clip`).
+2. `emit_spar_cap_polygon` uses `FlapwiseStrip` whenever `flapwise_*` is set —
+   same contract as sandwich cores; no longer requires `_strip_clip`.
+3. `build_spar_caps` `continuous_box` sets `c_lo/c_hi` from `c_station[0]/[-1]`.
+
+`export.py` `cap.difference(webs)` unchanged — it only trims overlap after the
+strip is authored.
+
+### Verification
+
+- `tests/test_family_d_cap_web_flush_under_twist.py` — solids and midlines flush
+  at 0° and 15° (`gap ≤ 1e-6` m).
+- Section-selection e2e `2D-F` / `new_3.2m_rotor` / 8 stations with plots: cross-
+  section PNGs show caps flush to both webs.
+
+## SG-012
+
+**Constructive CapWall solids split suction/pressure spar caps on `y=0`, not the cavity midline**
+
+**Status:** Fixed
+**Found:** 2026-09-06
+**Fixed:** 2026-09-06
+**Area:** `recipes/walls.py::CapWall`, `sections/build_spar_caps.py`,
+section-selection viz `_rebuild_sized_section_for_viz`
+
+### Symptom
+
+On outboard `2D-F` stations (e.g. section-selection e2e st045 / st054 / tip
+st063), suction and pressure spar caps appear to merge across the bay. The
+shared boundary sits on a near-horizontal chord line; suction area is ~2.7×
+pressure for equal recipe heights. Tip stations with `spar_cap_thickness`
+run out (`None`) still plot thick caps.
+
+### Evidence
+
+NACA 2412, chord 0.123 m, skin 3 mm / spar 6.125 mm / web 4 mm, layout `2D-F`,
+twist 0°:
+
+| Path | Area ratio su/pr | Shared boundary |
+|---|---|---|
+| Pre-fix constructive solids | ≈ 2.70 | `y = 0` |
+| Post-fix constructive solids | ≈ 1.00 | cavity midline (`camber_xy`) |
+
+`cap_feasibility_clamp` already returned `info["camber_xy"]` (SG-010) and
+`_project_cap` attached it to SDF `SparCap` components. CapWall recipes —
+the SoT for `emit_wall_solid_polygons` / cross-section plots — never stored
+those samples, so `emit_spar_cap_polygon` fell through to
+`half_plane_clip(..., y=0)`.
+
+Separately, viz `_rebuild_sized_section_for_viz` replaced a missing/zero spar
+DV with `skin_thickness` while keeping the root `2D-F` layout, redrawing caps
+after BL-006 run-out.
+
+### Root cause
+
+Camber split lived only on the SDF projection, not on the constructive CapWall
+recipe consumed by plot emission. Tip viz invented a spar thickness instead of
+stepping to the cap-less sibling layout.
+
+### Fix
+
+1. Store `camber_xy` on `CapWall`; `_cap_wall` freezes feasibility samples into
+   the recipe for all placement kinds (`continuous_box`, `fixed_band`,
+   `per_web_pads`).
+2. CapWall `_component` / `to_boundary_polygon` default to the stored camber so
+   constructive emit uses `_camber_clip`.
+3. Viz: when the layout has caps but `spar_cap_thickness <= 0`, switch to
+   `layout_without_spar_caps` instead of inventing a thickness.
+
+### Verification
+
+- `tests/test_cap_camber_split_constructive.py` — constructive area ratio in
+  `[0.75, 1.35]` at 0° and 2.7°; untwisted interface tracks cavity midline.
+- `tests/unit/test_retain_mesh.py::test_viz_rebuild_drops_caps_when_spar_dv_missing`
+  — no `spar_cap_*` labels when the DV is omitted.

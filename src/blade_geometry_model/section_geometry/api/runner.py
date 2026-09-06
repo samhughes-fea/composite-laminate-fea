@@ -75,6 +75,7 @@ class SectionGeometryRunner:
         quadtree_spec: Any | None = None,
         airfoil_for_spec: Any | None = None,
         resolution: StationLayoutResolution | None = None,
+        spar_cap_ply_pitch_m: float | None = None,
     ) -> None:
         from .kwarg_aliases import (
             resolve_shear_web_thickness,
@@ -133,6 +134,11 @@ class SectionGeometryRunner:
         # different web set than the station was frozen against.
         self._resolution: StationLayoutResolution | None = resolution
         self._result: SectionGeometryResult | None = None
+        self._spar_cap_ply_pitch_m = (
+            float(spar_cap_ply_pitch_m)
+            if spar_cap_ply_pitch_m is not None
+            else None
+        )
 
     def resolve(self) -> "SectionGeometryRunner":
         """Resolve the effective layout **without building geometry**.
@@ -187,6 +193,7 @@ class SectionGeometryRunner:
             airfoil_for_spec=self._airfoil_for_spec,
             web_x_positions_m=resolution.web_x_positions_m,
             web_y_coords=getattr(resolution, "web_y_coords", None),
+            spar_cap_ply_pitch_m=self._spar_cap_ply_pitch_m,
         )
         self._resolution = resolution
         self._executed = True

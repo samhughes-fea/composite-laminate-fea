@@ -88,6 +88,7 @@ def multicell_from_section_layout(
     web_x_positions_m: Sequence[float] | None = None,
     web_y_coords: Sequence[tuple[float, float]] | None = None,
     stage_sink: dict[str, float] | None = None,
+    spar_cap_ply_pitch_m: float | None = None,
 ) -> SectionMidlineHost:
     """Assemble from parametric :class:`SectionLayout` (catalogue key optional)."""
     from blade_structure_utilities.geometry_utilities.section_geometry.sections.multicell import (
@@ -162,6 +163,7 @@ def multicell_from_section_layout(
         stage_sink=stage_sink,
         cap_placement=cap_rule,
         web_endpoints=web_endpoints,
+        spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
     )
 
 
@@ -180,6 +182,7 @@ def multicell_from_layout(
     web_x_positions_m: Sequence[float] | None = None,
     web_y_coords: Sequence[tuple[float, float]] | None = None,
     stage_sink: dict[str, float] | None = None,
+    spar_cap_ply_pitch_m: float | None = None,
 ) -> SectionMidlineHost:
     """Assemble a sized :class:`MultiCellSection`.
 
@@ -200,6 +203,7 @@ def multicell_from_layout(
         web_x_positions_m=web_x_positions_m,
         web_y_coords=web_y_coords,
         stage_sink=stage_sink,
+        spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
     )
 
 

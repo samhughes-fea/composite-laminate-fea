@@ -9,6 +9,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sdf.ir import
 from blade_structure_utilities.geometry_utilities.section_geometry.sections.clip_algebra import (
     ChordBand,
     _airfoil_offset_arc,
+    _parallel_web_strip_clip,
     airfoil_expr,
     camber_side_field,
     lower_half_plane_expr,
@@ -79,6 +80,15 @@ class SparCap(SectionComponent):
         self.skin_thickness = float(skin_thickness)
         self.twist_angle = float(twist_angle)
         self._af = airfoil_sdf
+        # CapWall carries flapwise_* without an explicit callable strip; derive
+        # the same midplane-to-midplane clip cores already honor (SG-011).
+        if strip_clip is None and self._flapwise_strip_ready():
+            strip_clip = _parallel_web_strip_clip(
+                float(flapwise_nx),
+                float(flapwise_ny),
+                float(flapwise_c_lo),
+                float(flapwise_c_hi),
+            )
         self._strip_clip = strip_clip
         self._camber_xy = None if camber_xy is None else np.asarray(camber_xy, dtype=float)
 
@@ -99,8 +109,10 @@ class SparCap(SectionComponent):
                 if self._camber_surface == "upper"
                 else lower_half_plane_expr()
             )
-        if strip_clip is not None:
-            clip_expr = strip_clip_expr(strip_clip, key=f"spar_strip_{id(strip_clip)}")
+        if self._strip_clip is not None:
+            clip_expr = strip_clip_expr(
+                self._strip_clip, key=f"spar_strip_{id(self._strip_clip)}"
+            )
         else:
             clip_expr = to_ir(ChordBand(x_start=float(x_start), x_end=float(x_end)))
         expr_raw = Intersect(Intersect(cap_lam, side_expr), clip_expr)
@@ -110,6 +122,16 @@ class SparCap(SectionComponent):
         else:
             expr = expr_raw
         super().__init__(expr)
+
+    def _flapwise_strip_ready(self) -> bool:
+        mode = str(self.flapwise_clip_mode or "strip")
+        return (
+            self.flapwise_nx is not None
+            and self.flapwise_ny is not None
+            and self.flapwise_c_lo is not None
+            and self.flapwise_c_hi is not None
+            and mode == "strip"
+        )
 
     def midline_polyline(self, n=80):
         arc = _airfoil_offset_arc(

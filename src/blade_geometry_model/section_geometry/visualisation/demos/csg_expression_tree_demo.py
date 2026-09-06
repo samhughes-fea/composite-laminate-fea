@@ -3,15 +3,15 @@ visualisation/demos/csg_expression_tree_demo.py
 ====================================
 Geometry is a compiled program: show the CSG expression tree behind a region.
 
-Every named region in a section is an ``Expr`` tree built in
-``sections/components/*.py`` and evaluated by ``sdf/ir.py``. A shear web, for
+Every named region in a section is an ``Expr`` tree projected from a wall
+recipe (``recipes/sdf_ir/``) and evaluated by ``sdf/ir.py``. A shear web, for
 example, is literally::
 
     Intersect(Capsule(axis, r=t/2), Offset(Polygon(airfoil), -skin_thickness))
 
 This demo draws that tree, evaluates it one operator at a time so the region
 visibly emerges, and counts how much of the whole section's tree is *shared*
-structure (the airfoil polygon is referenced by every component but stored and
+structure (the airfoil polygon is referenced by every wall but stored and
 evaluated once).
 
 Writes under ``visualisation/output/csg_expression_tree/``:

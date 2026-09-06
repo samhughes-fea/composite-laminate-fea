@@ -73,6 +73,7 @@ class MultiCellSection:
         cap_placement=None,
         web_endpoints=None,
         stage_sink: dict[str, float] | None = None,
+        spar_cap_ply_pitch_m: float | None = None,
     ):
         """Assemble a multi-cell section.
 
@@ -81,6 +82,10 @@ class MultiCellSection:
         ``web_y_coords`` are ignored for axis geometry (bay clips still use the
         chordwise mid-station of each axis). True Y-branching (three or more
         walls at one node) is out of scope.
+
+        ``spar_cap_ply_pitch_m`` (optional): floor post-clamp cap heights onto
+        this ply pitch so CapWall / midlines stay on-grid for Catalog FI bind
+        (BL-019).
         """
         explicit_endpoints = None
         if web_endpoints is not None:
@@ -350,6 +355,7 @@ class MultiCellSection:
                     dhw=_dhw,
                     y_search=y_search,
                     phi_inner_ref=phi_inner_ref,
+                    spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
                 )
                 self._components[ComponentLabel.SPAR_CAP_SUCTION_SURFACE] = cap_upper
                 self._components[ComponentLabel.SPAR_CAP_PRESSURE_SURFACE] = cap_lower

@@ -89,7 +89,18 @@ flowchart LR
 Station resolve is orchestrated from [`../api/`](../api/README.md)
 (`resolve_station_layout`).
 
+**Visual SoT for root-anchored vs station-relative webs:** the demo
+[`../visualisation/demos/spanwise_yz_plan_flyover.py`](../visualisation/demos/spanwise_yz_plan_flyover.py)
+animates absolute LE tracks along the planform and shows webs **dropped** when
+the local cavity can no longer hold them (not slid). BSP L2 stamps
+`web_x_positions_m`; this package owns the drop / catalogue step-down.
+`section_schedule` does **not** own this policy (thickness presence is a
+different spanwise product — see BSP
+[`glossary`](../../../../blade_structure_precompute/module/section_selection/docs/glossary.md)).
+
 ## See also
 
 - [`../docs/reference/system_type_xyz_taxonomy.md`](../docs/reference/system_type_xyz_taxonomy.md)
 - [`../sections/`](../sections/README.md)
+- [`../visualisation/demos/spanwise_yz_plan_flyover.py`](../visualisation/demos/spanwise_yz_plan_flyover.py)
+- BSP [`package_boundaries.md`](../../../../blade_structure_precompute/module/section_selection/docs/package_boundaries.md) §3.2 / §3.10

@@ -14,6 +14,13 @@ from .plot import (
     plot_shell_midline_strip_topology,
     taxonomy_plot_caption,
 )
+from .plot_cell_wall_loops import (
+    LOOP_STYLES,
+    draw_cell_wall_loops_dashed,
+    draw_cell_wall_loops_filled,
+    draw_component_midlines,
+    plot_section_with_cell_wall_loops,
+)
 
 __all__ = [
     "plot_sdf_field",
@@ -28,4 +35,9 @@ __all__ = [
     "taxonomy_plot_caption",
     "_DEFAULT_COLOR",
     "_component_color",
+    "LOOP_STYLES",
+    "draw_component_midlines",
+    "draw_cell_wall_loops_dashed",
+    "draw_cell_wall_loops_filled",
+    "plot_section_with_cell_wall_loops",
 ]

@@ -30,7 +30,6 @@ assigned downstream (`section_bind`).
 | `build_spar_caps.py` | `CapPlacementRule` → `CapWall` recipes → SDF IR |
 | `web_layout.py` | Web anchor resolution |
 | `cap_feasibility.py` | Skip caps that do not fit |
-| `components/` | Compatibility shim → [`../recipes/sdf_ir/`](../recipes/sdf_ir/README.md) |
 
 ## API
 

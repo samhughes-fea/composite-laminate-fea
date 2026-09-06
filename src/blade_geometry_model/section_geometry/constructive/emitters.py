@@ -168,27 +168,34 @@ def emit_spar_cap_polygon(
         # ``slab.bounds``, and Shapely raises an opaque LinearRing error on the
         # empty bounds rather than returning an empty geometry.
         return Polygon()
+    # Prefer CapWall flapwise_* (same contract as SandwichCore) so recipe-driven
+    # emission stays flush to web midplanes under twist (SG-011). Explicit
+    # ``_strip_clip`` still requires the flapwise params for the Shapely path.
     strip_clip = getattr(comp, "_strip_clip", None)
-    if strip_clip is not None:
-        # Clip the solid directly with the same parallel-line strip the IR path
-        # uses (``_parallel_web_strip_clip``). Previously this approximated the
-        # clip by the chordwise extent of the *midline*, which coupled the
-        # geometry-property path to the midline construction; the parameters are
-        # now carried on the component, so the two are independent.
-        if getattr(comp, "flapwise_nx", None) is None:
+    fw_nx = getattr(comp, "flapwise_nx", None)
+    fw_ny = getattr(comp, "flapwise_ny", None)
+    fw_lo = getattr(comp, "flapwise_c_lo", None)
+    fw_hi = getattr(comp, "flapwise_c_hi", None)
+    mode = str(getattr(comp, "flapwise_clip_mode", "strip") or "strip")
+    use_flapwise = (
+        fw_nx is not None
+        and fw_ny is not None
+        and fw_lo is not None
+        and fw_hi is not None
+        and mode == "strip"
+    )
+    if strip_clip is not None or use_flapwise:
+        if fw_nx is None or fw_ny is None or fw_lo is None or fw_hi is None:
             raise ValueError(
-                "SparCap has a strip_clip but no flapwise_nx/ny/c_lo/c_hi/clip_mode; "
-                "the polygon path needs the clip parameters to clip the solid. "
-                "Construct it via spar_family (which supplies them) or pass them "
-                "explicitly."
+                "SparCap flapwise clip needs flapwise_nx/ny/c_lo/c_hi/clip_mode; "
+                "construct via CapWall / spar_family or pass them explicitly."
             )
-        mode = str(getattr(comp, "flapwise_clip_mode", "strip") or "strip")
         slab = apply_shapely(
             FlapwiseStrip(
-                nx=float(comp.flapwise_nx),
-                ny=float(comp.flapwise_ny),
-                c_lo=comp.flapwise_c_lo,
-                c_hi=comp.flapwise_c_hi,
+                nx=float(fw_nx),
+                ny=float(fw_ny),
+                c_lo=fw_lo,
+                c_hi=fw_hi,
                 clip_mode=mode,  # type: ignore[arg-type]
             ),
             slab,

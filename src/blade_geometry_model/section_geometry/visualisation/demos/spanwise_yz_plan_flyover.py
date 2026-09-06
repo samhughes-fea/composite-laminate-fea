@@ -34,12 +34,11 @@ Run from the repository root::
 
     python blade_structure_utilities/geometry_utilities/section_geometry/visualisation/demos/spanwise_yz_plan_flyover.py
 
-Provenance note: this script is a reconstruction. The original generator for
-``spawnise_YZ_plan_flyover.gif`` was lost, and that GIF sat loose at the root of
-``visualisation/output/`` with no script anywhere in the repo. This rebuilds the
-same figure from the surviving machinery — the shared spanwise station loader and
-the same ``resolve_web_anchors`` / ``inner_y_at_x`` calls that
-``spanwise_web_anchors.py`` probes with — so the result is reproducible again.
+Provenance note: this script is a reconstruction. An earlier misspelled GIF
+(``spawnise_YZ_plan_flyover.gif``) sat orphaned with no generator in the repo.
+This rebuilds the figure from the shared spanwise station loader and the same
+``resolve_web_anchors`` / ``inner_y_at_x`` calls that ``spanwise_web_anchors.py``
+probes with. The deck tracks ``spanwise_yz_plan_flyover.gif`` only.
 """
 
 from __future__ import annotations

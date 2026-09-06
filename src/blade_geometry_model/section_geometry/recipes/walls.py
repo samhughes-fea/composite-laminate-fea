@@ -146,7 +146,15 @@ class CapWall:
     flapwise_c_lo: float | None = None
     flapwise_c_hi: float | None = None
     flapwise_clip_mode: FlapwiseClipMode | None = None
+    # Cavity-midline samples from cap_feasibility_clamp (SG-010 / SG-012).
+    # Stored on the recipe so constructive emit does not fall back to y=0.
+    camber_xy: tuple[tuple[float, float], ...] | None = None
     emission_maturity: EmissionMaturity = "constructive"
+
+    def _resolved_camber_xy(self, camber_xy=None):
+        if camber_xy is not None:
+            return camber_xy
+        return self.camber_xy
 
     def _component(self, airfoil, *, camber_xy=None, airfoil_expr_node=None) -> SparCap:
         return SparCap(
@@ -157,7 +165,7 @@ class CapWall:
             float(self.cap_height),
             surface=self.surface,
             twist_angle=float(self.twist_angle),
-            camber_xy=camber_xy,
+            camber_xy=self._resolved_camber_xy(camber_xy),
             airfoil_expr_node=airfoil_expr_node,
             flapwise_nx=self.flapwise_nx,
             flapwise_ny=self.flapwise_ny,

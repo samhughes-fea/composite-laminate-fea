@@ -1,5 +1,10 @@
 # section_geometry performance work — status and next steps
 
+> **Status:** Historical performance handoff. Paths that cite deleted
+> `engine/` / `interface/` / `core/` trees are **stale** — those homes are gone
+> (see [G_ROW_OWNERSHIP_MATRIX](../reference/G_ROW_OWNERSHIP_MATRIX.md)). Prefer
+> live domain homes (`sdf/`, `sections/`, `props_emit/`, …) when following links.
+
 Phase timings for computational-efficiency work on `section_geometry`. Short
 handoff:
 [section_geometry_efficiency_review.md](../../../../../../docs/architecture/section_geometry_efficiency_review.md).

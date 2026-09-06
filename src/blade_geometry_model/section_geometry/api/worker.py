@@ -516,6 +516,7 @@ def build_section_with_thicknesses(
     web_x_positions_m: Sequence[float] | None = None,
     web_y_coords: Sequence[tuple[float, float]] | None = None,
     stage_sink: dict[str, float] | None = None,
+    spar_cap_ply_pitch_m: float | None = None,
 ) -> SectionMidlineHost:
     """Build sized implicit section geometry for a layout and free DVs.
 
@@ -558,6 +559,7 @@ def build_section_with_thicknesses(
         web_x_positions_m=web_x_positions_m,
         web_y_coords=web_y_coords,
         stage_sink=stage_sink,
+        spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
     )
 
 
@@ -580,6 +582,7 @@ def build_section_geometry(
     airfoil_for_spec: AirfoilSDF | None = None,
     web_x_positions_m: Sequence[float] | None = None,
     web_y_coords: Sequence[tuple[float, float]] | None = None,
+    spar_cap_ply_pitch_m: float | None = None,
 ) -> SectionGeometryResult:
     """Geometry worker entry: assemble section and emit gated carriers.
 
@@ -662,6 +665,7 @@ def build_section_geometry(
             web_x_positions_m=web_x_positions_m,
             web_y_coords=web_y_coords,
             stage_sink=stage_s,
+            spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
         )
 
     properties_map: dict[str, dict[str, float]] | None = None
