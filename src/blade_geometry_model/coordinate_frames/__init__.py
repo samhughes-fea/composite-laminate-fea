@@ -2,6 +2,7 @@
 Coordinate frames: R / B / S / S′ / C / E / M and shell load-channel map.
 
 Ownership homes: ``section_frames/`` (B/S/S′) and ``shell_frames/`` (C/E/M).
+Short tags: ``frame_tags`` (``FrameTag`` / ``FRAME_*`` / ``require_frame_tag``).
 Operational demos: ``visualisation/``.
 
 Prefer this barrel for public imports. Deep home imports are allowed for
@@ -9,6 +10,18 @@ maintainers; do not reimplement twist / NACA pivot / flap↔My/Mz outside these
 homes.
 """
 
+from .frame_tags import (
+    FRAME_B,
+    FRAME_C,
+    FRAME_E,
+    FRAME_M,
+    FRAME_R,
+    FRAME_S,
+    FRAME_SPRIME,
+    FRAME_TAGS,
+    FrameTag,
+    require_frame_tag,
+)
 from .section_frames import (
     FRAME_ID_BY_LETTER,
     LETTER_BY_FRAME_ID,
@@ -39,6 +52,13 @@ from .section_frames import (
     section_plot_axes,
     setup_section_axes,
     structural_product_moment,
+    rotate_points_2d,
+    transform_points_S_to_B,
+    transform_points_B_to_S,
+    transform_points_S_to_Sprime,
+    transform_points_Sprime_to_S,
+    transform_points_aerofoil_to_S,
+    rR_from_zL_scalars,
 )
 from .shell_frames import (
     ShellSolverChannels,
@@ -55,7 +75,16 @@ from .shell_frames import (
 )
 
 __all__ = [
+    "FRAME_B",
+    "FRAME_C",
+    "FRAME_E",
     "FRAME_ID_BY_LETTER",
+    "FRAME_M",
+    "FRAME_R",
+    "FRAME_S",
+    "FRAME_SPRIME",
+    "FRAME_TAGS",
+    "FrameTag",
     "LETTER_BY_FRAME_ID",
     "PIVOT_FRACTION_DEFAULT",
     "TWISTED_PITCH_AXIS_BLADE_FRAME",
@@ -70,6 +99,7 @@ __all__ = [
     "naca_to_S",
     "naca_to_twisted_pitch_axis_blade_frame",
     "naca_to_zero_twist_pitch_axis_station_frame",
+    "require_frame_tag",
     "rotate_B_to_S",
     "rotate_S_to_B",
     "rotate_S_to_B_swapped_order",
@@ -86,6 +116,13 @@ __all__ = [
     "section_plot_axes",
     "setup_section_axes",
     "structural_product_moment",
+    "rotate_points_2d",
+    "transform_points_S_to_B",
+    "transform_points_B_to_S",
+    "transform_points_S_to_Sprime",
+    "transform_points_Sprime_to_S",
+    "transform_points_aerofoil_to_S",
+    "rR_from_zL_scalars",
     "ply_strain_transform_E_to_M",
     "ply_strain_transform_M_to_E",
     "ply_stress_transform_E_to_M",

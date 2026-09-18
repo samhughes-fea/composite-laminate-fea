@@ -40,11 +40,27 @@ from .plot import (
 )
 from .span import SpanFrameTransforms
 from .tensors import structural_product_moment
+from .point_transforms import (
+    rotate_points_2d,
+    transform_points_S_to_B,
+    transform_points_B_to_S,
+    transform_points_S_to_Sprime,
+    transform_points_Sprime_to_S,
+    transform_points_aerofoil_to_S,
+    rR_from_zL_scalars,
+)
 
 __all__ = [
     "CoordinateFrameTransforms",
     "SpanFrameTransforms",
     "structural_product_moment",
+    "rotate_points_2d",
+    "transform_points_S_to_B",
+    "transform_points_B_to_S",
+    "transform_points_S_to_Sprime",
+    "transform_points_Sprime_to_S",
+    "transform_points_aerofoil_to_S",
+    "rR_from_zL_scalars",
     "FRAME_ID_BY_LETTER",
     "LETTER_BY_FRAME_ID",
     "TWISTED_PITCH_AXIS_BLADE_FRAME",

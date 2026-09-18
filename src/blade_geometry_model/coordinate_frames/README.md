@@ -31,9 +31,9 @@ Always use these explicit names — avoid bare “local/global” and “strip l
 
 | | |
 |---|---|
-| **Owns** | Axis sense and plot contract for B/S/S′; S↔B geometry/moment/inertia maps; NACA↔S adapter; section-plot helpers; E↔M ply \(T_\sigma/T_\varepsilon\); product shell load-channel adapter |
+| **Owns** | Short tags (`FrameTag` / `FRAME_*` / `require_frame_tag`); axis sense and plot contract for B/S/S′; S↔B geometry/moment/inertia maps; NACA↔S adapter; section-plot helpers; E↔M ply \(T_\sigma/T_\varepsilon\); product shell load-channel adapter |
 | **Does not own** | SDF solids, strip meshing, MITC4 kinematics, Hashin FI evaluation |
-| **Consumers** | `section_contract` (B midlines / `BeamResultantVector` frame tags), `section_geometry` (S authoring / B emit), `section_mesh` (+x3 / B midlines), FE tertiary/quaternary, beam `StressHistory`, root_blend adapters |
+| **Consumers** | `section_contract` (B midlines / `BeamResultantVector` frame tags), `section_geometry` (S authoring / B emit), `section_mesh` (+x3 / B midlines), FE tertiary/quaternary, beam `StressHistory`, root_blend adapters, BIS nests / BSP assemble scratch |
 
 ---
 
@@ -75,8 +75,11 @@ flowchart LR
 
 | # | Home | Owns |
 |---|------|------|
+| 0 | [`frame_tags.py`](frame_tags.py) | Canonical short tags `FrameTag` / `FRAME_*` / `require_frame_tag` for structural dataclass fields |
 | 1 | [`section_frames/README.md`](section_frames/README.md) | Shared B/S/S′ storage + plot contract; NACA adapter; S↔B; Exact I/O for geometry helpers |
 | 2 | [`shell_frames/README.md`](shell_frames/README.md) | C / E / M axes; C≡E; \(T_\sigma\) / \(T_\varepsilon\); FI-in-M; Exact I/O for ply transforms |
+
+**Container tagging.** Structural `frame` / `*_frame` fields on dataclasses across `src` should use `FrameTag` and validate with `require_frame_tag` at construction or finalize. Prefer `FRAME_B` (etc.) over bare string literals. Containers carry tags only — they must not reimplement S↔B / E↔M.
 
 Operational demos (demos / plots): [`visualisation/`](visualisation/README.md).
 
@@ -148,6 +151,7 @@ python -m blade_structure_utilities.geometry_utilities.coordinate_frames.visuali
 coordinate_frames/
 ├── README.md                 # package index
 ├── FRAMES_INVENTORY.md       # classification / known issues
+├── frame_tags.py             # short-tag SoT (FrameTag / FRAME_* / require_frame_tag)
 ├── section_frames/           # home 1 — B / S / S′
 ├── shell_frames/             # home 2 — C / E / M
 ├── visualisation/            # demos + output (demos / plots)

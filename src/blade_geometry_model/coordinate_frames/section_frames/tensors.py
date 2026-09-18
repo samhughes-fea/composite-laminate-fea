@@ -426,7 +426,26 @@ def transform_moments_B_to_S(
             raise ValueError(f"M_XB shape {M_XB.shape} incompatible with M_YB shape {M_YB.shape}")
     if twist_deg.shape != M_YB.shape:
         if twist_deg.size == 1:
-            twist_deg = np.full_like(M_YB, float(twist_deg))
+            twist_deg = np.full_like(M_YB, float(np.asarray(twist_deg).reshape(-1)[0]))
+        elif (
+            twist_deg.ndim == 1
+            and M_YB.ndim >= 1
+            and twist_deg.shape[0] == M_YB.shape[0]
+        ):
+            # Per-station twist with trailing load axes (n_span,) -> (n_span, ...)
+            twist_deg = np.broadcast_to(
+                twist_deg.reshape(twist_deg.shape[0], *([1] * (M_YB.ndim - 1))),
+                M_YB.shape,
+            ).copy()
+        elif (
+            twist_deg.ndim == M_YB.ndim
+            and twist_deg.shape[0] == M_YB.shape[0]
+            and all(
+                t == 1 or t == m
+                for t, m in zip(twist_deg.shape[1:], M_YB.shape[1:])
+            )
+        ):
+            twist_deg = np.broadcast_to(twist_deg, M_YB.shape).copy()
         else:
             raise ValueError(f"twist_deg shape {twist_deg.shape} incompatible with M_YB shape {M_YB.shape}")
     
