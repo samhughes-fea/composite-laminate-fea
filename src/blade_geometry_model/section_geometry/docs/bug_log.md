@@ -38,6 +38,7 @@ Deviations are stated per entry.
 | [SG-010](#sg-010) | The surface dividing suction from pressure spar caps is a 33-point polyline | **Fixed** — `n_samples` derived from a 1 µm solid-clip budget |
 | [SG-011](#sg-011) | Family-D continuous-box spar caps leave a bay gap against flapwise webs under twist | **Fixed** — CapWall flapwise strip + `c_station` SoT |
 | [SG-012](#sg-012) | Constructive CapWall solids split suction/pressure on `y=0`, not cavity midline | **Fixed** — store `camber_xy` on CapWall recipes |
+| [SG-013](#sg-013) | Family-C (and B) pads recenter onto `argmax(depth)` instead of the web / band center | **Fixed** — `extent_anchor="band_center"` symmetric half-width |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -969,3 +970,54 @@ stepping to the cap-less sibling layout.
   `[0.75, 1.35]` at 0° and 2.7°; untwisted interface tracks cavity midline.
 - `tests/unit/test_retain_mesh.py::test_viz_rebuild_drops_caps_when_spar_dv_missing`
   — no `spar_cap_*` labels when the DV is omitted.
+
+## SG-013
+
+**Family-C (and B) pads recenter onto `argmax(depth)` instead of the web / band center**
+
+**Status:** Fixed
+**Found:** 2026-09-07
+**Fixed:** 2026-09-07
+**Area:** `sections/cap_feasibility.py`, `sections/build_spar_caps.py`
+
+### Symptom
+
+On cambered sections (e.g. section-selection e2e `1C-F` at st038 / z/L≈0.60),
+family-C spar caps are visibly skewed about the shear web — more chordwise
+extent LE-ward than TE-ward — despite being authored as `web_x ± dhw`.
+
+### Evidence
+
+`cap_feasibility_clamp(..., aft_half_depth_rule=False)` rebuilt the feasible
+interval by growing from `nanargmax(depth)`. On NACA 2412 the deepest cavity
+sample sits LE-ward of a mid/aft web, so the contiguous feasible island slides
+off the web. Taxonomy already requires **Y = C** caps “centred on each web
+chord station” (`reference/system_type_xyz_taxonomy.md`).
+
+### Root cause
+
+The `False` branch of `_contiguous_extent` was written as a deepest-point
+island grower (legacy unused path) and then wired to B/C under BL-008 without
+preserving the authored band midpoint. Family D’s `aft_half_depth_rule=True`
+path never touches extent and was not at fault.
+
+### Fix
+
+1. `cap_feasibility_clamp` gains `extent_anchor` (`"band_center"` default,
+   `"deepest"` legacy) and optional `center_x`.
+2. `"band_center"` finds the largest half-width such that
+   `[center − half_w, center + half_w]` is feasible everywhere — equal trim,
+   midpoint fixed (SG-013). Collapsed bands scale heights to the worst sample
+   in the authored band; a web that cannot carry any centred pad runs out
+   (`pad_run_out`, height 0) instead of emitting a zero-width strip.
+3. `build_spar_caps` passes `extent_anchor="band_center"` for B/C with
+   `center_x` = pitch/max-thickness or each `xs[i]`. Multi-web C re-clamps
+   extents after the shared min height, and skips run-out pads when taking that
+   min / emitting CapWalls. Family D unchanged.
+
+### Verification
+
+- `tests/test_cap_feasibility_clamp.py` — 2412 band_center midpoint stays on
+  `center_x`; deepest drifts LE-ward; D aft-rule bit-identical; B/C tip meshability.
+- `tests/test_structural_family.py::test_structural_C_cap_recipes_centered_on_webs`
+  — CapWall midpoints match web stations on 2412.

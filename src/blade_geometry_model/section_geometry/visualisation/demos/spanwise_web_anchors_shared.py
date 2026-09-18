@@ -10,7 +10,7 @@ import numpy as np
 from blade_structure_precompute.examples._shared import load_blade_structure_inputs
 from blade_structure_precompute.module.feasibility import Feasibility
 from blade_structure_precompute.module.internal_force import InternalForce
-from blade_structure_precompute.module.scale import Scale
+from blade_structure_precompute.examples._shared.scaled_geometry import analysis_geometry_from_blade
 
 DEFAULT_ROTOR = "new_3.2m_rotor"
 DEFAULT_MATERIALS = {"skin": 2, "spar": 2, "web": 2}
@@ -43,11 +43,7 @@ def build_stations(
         apply_benchmark_64_station_grid=bool(apply_benchmark_64_station_grid),
     )
 
-    scale = Scale(
-        blade_geometry=inputs.blade_geometry,
-        sampling_distribution_parameters=inputs.sampling_distribution_parameters,
-    )
-    scale.execute()
+    scale = analysis_geometry_from_blade(inputs.blade_geometry, inputs.sampling_distribution_parameters)
     try:
         ifm = InternalForce(scaling=scale, loading=inputs.loading)
         ifm.execute()

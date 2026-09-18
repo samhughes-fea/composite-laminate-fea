@@ -129,7 +129,7 @@ These axes are not interchangeable.
 | **Pitching axis** | Stacking / twist reference; often ~⅓·c from LE. Not elastic axis or shear centre. |
 | **Max-thickness locus** | Optional **Y = B** anchor from `AirfoilSDF.thickness_distribution`. |
 | **Elastic / centroid / shear centre** | Not used for cap placement in v1. |
-| **Web-local reference** | **Y = C** caps centred on each web chord station. |
+| **Web-local reference** | **Y = C** caps centred on each web chord station ([SG-013](../bug_log.md#sg-013)). |
 
 | `structural_family` | Behaviour |
 |---------------------|-----------|

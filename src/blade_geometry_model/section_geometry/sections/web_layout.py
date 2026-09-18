@@ -196,7 +196,7 @@ def resolve_web_anchors(
 
     xs_in = [float(x) for x in web_x_positions]
     if not xs_in:
-        return []
+        return ([], []) if return_dropped else []
 
     verts = getattr(airfoil_sdf, "vertices", None)
     xmin = xmax = None

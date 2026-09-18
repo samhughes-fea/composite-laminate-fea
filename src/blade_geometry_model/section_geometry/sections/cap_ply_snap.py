@@ -16,9 +16,10 @@ _ONE_PLY_REL_TOL = 1e-9
 def snap_cap_height_at_most(height_m: float, pitch_m: float | None) -> float:
     """Greatest on-grid height that does not exceed `height_m`.
 
-    Returns `height_m` unchanged when `pitch_m` is absent/invalid, or when
-    not even one ply fits (sub-ply residual — leave continuous; sizing run-out
-    owns gauge decisions).
+    Returns `height_m` unchanged when `pitch_m` is absent/invalid.
+    When not even one ply fits (`height_m < pitch`), returns ``0.0`` — geometric
+    run-out, matching ``PlyGrid.largest_at_most``. Leaving a sub-ply continuous
+    strip made laminate ceil (1 ply) disagree with geometry and broke Catalog FI.
     """
     if pitch_m is None:
         return float(height_m)
@@ -27,7 +28,7 @@ def snap_cap_height_at_most(height_m: float, pitch_m: float | None) -> float:
     if not (p > 0.0) or not math.isfinite(p) or not math.isfinite(c):
         return float(height_m)
     if c < p:
-        return float(height_m)
+        return 0.0
     return math.floor(c / p + _ONE_PLY_REL_TOL) * p
 
 

@@ -21,7 +21,9 @@ def test_snap_cap_height_floors_onto_pitch() -> None:
     pitch = 0.000125
     assert snap_cap_height_at_most(0.00770153, pitch) == pytest.approx(0.007625)
     assert snap_cap_height_at_most(0.00775, pitch) == pytest.approx(0.00775)
-    assert snap_cap_height_at_most(0.00005, pitch) == pytest.approx(0.00005)
+    # Sub-ply residual is geometric run-out (align with PlyGrid.largest_at_most).
+    assert snap_cap_height_at_most(0.00005, pitch) == pytest.approx(0.0)
+    assert PlyGrid(t_ply=pitch, unit_plies=1).largest_at_most(0.00005) == pytest.approx(0.0)
 
 
 def test_clamp_then_snap_is_on_grid_and_at_most_clamped() -> None:

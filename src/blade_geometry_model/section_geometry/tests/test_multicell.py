@@ -7,6 +7,9 @@ Unit tests for MultiCellSection and the corrected SparCap construction.
 import numpy as np
 import pytest
 
+from blade_structure_utilities.geometry_utilities.section_contract.errors import (
+    InfeasibleSectionGeometry,
+)
 from blade_structure_utilities.geometry_utilities.section_geometry import (
     AirfoilSDF,
     MultiCellSection,
@@ -151,6 +154,7 @@ class TestMultiCellTopology:
         np.testing.assert_allclose(p0, p1, atol=1e-9, rtol=0)
 
     def test_single_web_d_spar_labels(self, af):
+        """d_spar is catalogue 1C (per_web_pads); continuous_box + N=1 is illegal."""
         mcs = MultiCellSection.d_spar(af, web_x=0.25,
                                       skin_thickness=0.003,
                                       cap_height=0.012,
@@ -161,8 +165,20 @@ class TestMultiCellTopology:
         assert "skin_suction_surface" in mcs.labels
         assert "skin_pressure_surface" in mcs.labels
         assert mcs.n_webs == 1
+        assert mcs.cap_placement.kind == "per_web_pads"
         assert "sandwich_core_0" in mcs.labels and "sandwich_core_1" in mcs.labels
         assert mcs.n_cells == 2
+
+    def test_continuous_box_with_one_web_is_infeasible(self, af):
+        with pytest.raises(InfeasibleSectionGeometry, match="continuous_box"):
+            MultiCellSection(
+                af,
+                web_x_positions=[0.25],
+                structural_family="D",
+                skin_thickness=0.003,
+                cap_height=0.012,
+                web_thickness=0.004,
+            )
 
     def test_twin_web_labels(self, af):
         mcs = MultiCellSection.twin_web(af)
@@ -180,10 +196,14 @@ class TestMultiCellTopology:
             assert f"sandwich_core_{j}" in mcs.labels
 
     def test_n_web_generalisation(self, af):
-        """N webs → N+1 structural bays (foam regions when core_enabled)."""
+        """N webs → N+1 structural bays (foam regions when core_enabled).
+
+        Uses family C so N=1 is a legal catalogue layout (1C); D requires N>=2.
+        """
         for n in range(1, 6):
             xs = np.linspace(0.15, 0.55, n).tolist()
             mcs = MultiCellSection(af, web_x_positions=xs,
+                                   structural_family="C",
                                    skin_thickness=0.003,
                                    cap_height=0.010,
                                    web_thickness=0.003)

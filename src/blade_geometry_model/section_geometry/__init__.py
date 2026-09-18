@@ -36,6 +36,7 @@ from .layout.thickness_limits import (
     clamp_web_thickness_m,
 )
 from .layout.system_layout import SYSTEM_TYPE_KEYS, SystemLayoutSpec, layout_without_spar_caps
+from .layout.spar_cap_runout import apply_spar_cap_runout, max_spar_from_cavity
 from .midlines.section_midline_host import SectionMidlineHost
 from .sections import MultiCellSection
 from .sdf.airfoil import AirfoilSDF
@@ -61,6 +62,8 @@ __all__ = [
     "SYSTEM_TYPE_KEYS",
     "SystemLayoutSpec",
     "layout_without_spar_caps",
+    "apply_spar_cap_runout",
+    "max_spar_from_cavity",
     "is_core_label",
     "MIN_REALISTIC_SKIN_WALL_THICKNESS_M",
     "MIN_REALISTIC_SPAR_WALL_THICKNESS_M",

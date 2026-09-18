@@ -97,6 +97,34 @@ def test_structural_C_discrete_caps(af):
     assert a > 0
 
 
+@pytest.mark.parametrize("web_xs", [
+    [0.45],
+    [0.25, 0.45, 0.65],
+])
+def test_structural_C_cap_recipes_centered_on_webs(af, web_xs):
+    """SG-013: each CapWall midpoint stays on its web station."""
+    m = MultiCellSection(
+        af,
+        web_x_positions=web_xs,
+        structural_family="C",
+        discrete_cap_chord_half_width=0.05,
+        skin_thickness=0.006,
+        web_thickness=0.008,
+        cap_height=0.014,
+        twist_angle=0.0,
+    )
+    recipes = m.spar_cap_wall_recipes
+    for i, web_x in enumerate(web_xs):
+        key = f"spar_cap_suction_surface_{i}"
+        assert key in recipes, sorted(recipes)
+        wall = recipes[key]
+        mid = 0.5 * (float(wall.x_start) + float(wall.x_end))
+        assert mid == pytest.approx(float(web_x), abs=2e-3)
+        assert (web_x - wall.x_start) == pytest.approx(
+            wall.x_end - web_x, abs=2e-3
+        )
+
+
 def test_B_C_require_airfoil_sdf_not_generic_callable():
     class Dummy:
         chord = 1.0

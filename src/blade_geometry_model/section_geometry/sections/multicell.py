@@ -205,12 +205,18 @@ class MultiCellSection:
                 xs = [0.5 * (e[0] + e[2]) for e in explicit_endpoints]
                 anchors = [(e[1], e[3]) for e in explicit_endpoints]
             elif web_y_coords is None:
-                resolved = resolve_web_anchors(
+                # Assemble is fail-closed: every *requested* web must anchor.
+                # Partial drops belong to resolve_station_layout / freeze, which
+                # step the catalogue (2D-F -> 1C-F) *before* assemble. Shrinking
+                # xs here while keeping continuous_box built illegal 1D solids
+                # (None caps -> twist AttributeError; Station 38).
+                resolved, dropped = resolve_web_anchors(
                     airfoil_sdf,
                     skin_thickness,
                     xs_requested,
                     y_search=y_search,
                     phi_inner=phi_inner_ref,
+                    return_dropped=True,
                 )
                 if xs_requested and not resolved:
                     raise InfeasibleSectionGeometry(
@@ -218,36 +224,53 @@ class MultiCellSection:
                         f"inner-skin offset (skin_thickness={skin_thickness:.6g}) "
                         f"at requested x={xs_requested}."
                     )
+                if dropped:
+                    drop_desc = ", ".join(
+                        f"{float(d.x_m):.6g} ({d.reason})" for d in dropped
+                    )
+                    raise InfeasibleSectionGeometry(
+                        "Requested webs cannot all anchor at this skin_thickness="
+                        f"{skin_thickness:.6g}: dropped [{drop_desc}]. "
+                        "Call resolve_station_layout (or pass frozen web_y_coords) "
+                        "so the layout steps down before assemble; assemble does "
+                        "not silently shrink the web set."
+                    )
                 xs = [a[0] for a in resolved]
                 anchors = [(a[1], a[2]) for a in resolved]
             else:
+                # Frozen anchors from resolve_station_layout / sizing freeze:
+                # do not re-probe in a way that can shorten the web set.
                 xs = list(xs_requested)
                 anchors = [(float(yt), float(yb)) for yt, yb in web_y_coords]
                 if len(anchors) != len(xs):
                     raise ValueError(f"web_y_coords must have {len(xs)} entries.")
 
         N = len(xs)
+        # Catalogue has no 1D: a continuous box needs fore and aft webs.
+        if _cap_rule.kind == "continuous_box" and N < 2:
+            raise InfeasibleSectionGeometry(
+                f"continuous_box cap placement requires at least 2 webs (got N={N}). "
+                "There is no 1D catalogue layout; resolve_station_layout must step "
+                "D-family to 1C (per_web_pads) before assemble."
+            )
         if isinstance(web_thickness, (int, float)):
             web_thicknesses = [float(web_thickness)] * N
         else:
             web_thicknesses = [float(t) for t in web_thickness]
-            if len(web_thicknesses) != len(xs_requested):
+            if len(web_thicknesses) != N:
                 raise ValueError(
-                    f"web_thickness must be scalar or length {len(xs_requested)}."
+                    f"web_thickness must be scalar or length {N} (got {len(web_thicknesses)})."
                 )
-            # If some webs were dropped, keep LE-most thicknesses in order.
-            web_thicknesses = web_thicknesses[:N]
         web_thicknesses = [clamp_web_thickness_m(t) for t in web_thicknesses]
 
         if isinstance(web_alignment, str):
             web_alignments = [web_alignment] * N
         else:
             web_alignments = list(web_alignment)
-            if len(web_alignments) != len(xs_requested):
+            if len(web_alignments) != N:
                 raise ValueError(
-                    f"web_alignment must be scalar or length {len(xs_requested)}."
+                    f"web_alignment must be scalar or length {N} (got {len(web_alignments)})."
                 )
-            web_alignments = web_alignments[:N]
 
         if isinstance(cap_height, (int, float)):
             cap_h_upper = cap_h_lower = float(cap_height)
@@ -357,6 +380,18 @@ class MultiCellSection:
                     phi_inner_ref=phi_inner_ref,
                     spar_cap_ply_pitch_m=spar_cap_ply_pitch_m,
                 )
+                # Cap run-out (BL-006) is decided *before* assemble via
+                # layout_without_spar_caps. Never store None placeholders:
+                # twist_component would crash on .expr (Station 38).
+                if cap_upper is None or cap_lower is None:
+                    raise InfeasibleSectionGeometry(
+                        "Cap placement "
+                        f"{_cap_rule.kind!r} expected spar caps but build_spar_caps "
+                        f"returned suction={cap_upper is not None} "
+                        f"pressure={cap_lower is not None}. Use "
+                        "layout_without_spar_caps when the cavity cannot hold "
+                        "minimum-gauge caps (BL-006); do not assemble None caps."
+                    )
                 self._components[ComponentLabel.SPAR_CAP_SUCTION_SURFACE] = cap_upper
                 self._components[ComponentLabel.SPAR_CAP_PRESSURE_SURFACE] = cap_lower
                 for label, wall in spar_cap_wall_recipes.items():
@@ -371,7 +406,7 @@ class MultiCellSection:
             if _cap_rule.kind == "none"
             else [cap_upper, cap_lower] + web_components
         )
-        wall_exclusion_exprs = [c.expr for c in wall_solids_for_core if c is not None]
+        wall_exclusion_exprs = [c.expr for c in wall_solids_for_core]
 
         with timed_stage("assemble_cores", stage_sink):
             from blade_structure_utilities.geometry_utilities.section_geometry.recipes.walls import (
@@ -588,6 +623,13 @@ class MultiCellSection:
 
     @classmethod
     def d_spar(cls, airfoil_sdf, web_x=0.25, **kwargs):
+        """Single-web section with caps (catalogue 1C / per_web_pads).
+
+        Historical name; continuous-box (D) with one web is illegal (no 1D).
+        Defaults to family ``C`` unless the caller overrides ``structural_family``
+        or ``cap_placement``.
+        """
+        kwargs.setdefault("structural_family", "C")
         return cls(airfoil_sdf, web_x_positions=[web_x], **kwargs)
 
     @classmethod
