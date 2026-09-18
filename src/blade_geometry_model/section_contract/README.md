@@ -49,7 +49,7 @@ Ownership index: [`docs/COEXISTENCE_IMPLICIT_SHELL.md`](../../docs/COEXISTENCE_I
 | Frozen handoff types `ShellMidlineStrip`, `CellWallLoop`, `BeamResultantVector` | SDF solids / CSG / IR ([`section_geometry`](../section_geometry/README.md)) |
 | Polyline-first invariant (no SDF eval past the boundary) | Strip mesh density / Q4 connectivity ([`section_mesh`](../../mesh_utilities/section_mesh/README.md)) |
 | Named six-vector storage order + conjugate projections | Product flap↔`My`/`Mz` polarity (adapter in [`coordinate_frames`](../coordinate_frames/README.md)) |
-| Frame **tags** and moment-reference metadata on resultants (`FRAME_B`, `about_xy`) | S↔B twist matrices / NACA pivot ([`section_frames`](../coordinate_frames/section_frames/README.md)) |
+| Frame **tag field** and moment-reference metadata on resultants (`frame`, `about_xy`); re-exports `FRAME_B` / `FRAME_S` / `FRAME_SPRIME` from `coordinate_frames` | Short-tag SoT + S↔B twist matrices / NACA pivot ([`coordinate_frames`](../coordinate_frames/README.md)) |
 | Shared infeasibility exception `InfeasibleSectionGeometry` | Laminate stacks, MITC4 `n_elements`, SFV shaping, FE solve |
 
 | Actor | Role |

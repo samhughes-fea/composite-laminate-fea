@@ -42,8 +42,13 @@ import numpy as np
 from numpy.typing import NDArray
 
 from blade_structure_utilities.geometry_utilities.coordinate_frames import (
+    FRAME_B,
+    FRAME_S,
+    FRAME_SPRIME,
     CoordinateFrameTransforms,
+    FrameTag,
     blade_resultants_to_shell_channels,
+    require_frame_tag,
     rotate_B_to_S,
     rotate_S_to_B,
 )
@@ -55,11 +60,6 @@ from blade_structure_utilities.geometry_utilities.section_contract.load_orders i
 
 # Named component → index in BEAM_IO_ORDER
 _IO_INDEX: dict[str, int] = {name: i for i, name in enumerate(BEAM_IO_ORDER)}
-
-# Structural frame tags (coordinate_frames inventory: B / S / S′)
-FRAME_B = "B"
-FRAME_S = "S"
-FRAME_SPRIME = "S'"
 
 # Legacy alias — same value as FRAME_B (midlines / FE resultants live in B).
 FRAME_SECTION_YZ = FRAME_B
@@ -140,7 +140,7 @@ class BeamResultantVector:
     """
 
     R: NDArray[np.float64]
-    frame: str
+    frame: FrameTag
     about_xy: tuple[float, float]
 
     def __post_init__(self) -> None:
@@ -154,8 +154,7 @@ class BeamResultantVector:
         if not (np.isfinite(x) and np.isfinite(y)):
             raise ValueError("about_xy must be finite")
         object.__setattr__(self, "about_xy", (x, y))
-        if not str(self.frame).strip():
-            raise ValueError("frame must be a non-empty string")
+        object.__setattr__(self, "frame", require_frame_tag(self.frame))
 
     # ------------------------------------------------------------------
     # Named component access
@@ -219,7 +218,7 @@ class BeamResultantVector:
         My: float = 0.0,
         Mz: float = 0.0,
         T: float = 0.0,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Build from named Saint-Venant / product-channel components."""
@@ -236,7 +235,7 @@ class BeamResultantVector:
         V_edgewise: float = 0.0,
         N: float = 0.0,
         T: float = 0.0,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Build via :func:`blade_resultants_to_shell_channels` (flap/edge → My/Mz)."""
@@ -265,7 +264,7 @@ class BeamResultantVector:
         row: Sequence[float] | NDArray[np.float64],
         order: Sequence[str],
         *,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Build from a positional row given an **explicit** source ``order``.
@@ -294,7 +293,7 @@ class BeamResultantVector:
         extreme_loads: Any,
         station_index: int,
         *,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Adapt one station from :class:`~blade_precompute.beam_resultants.core.types.ExtremeLoads`."""
@@ -316,7 +315,7 @@ class BeamResultantVector:
         integrated: Any,
         station_index: int,
         *,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Adapt one station from :class:`~blade_utilities.loads.IntegratedResultants`."""
@@ -337,7 +336,7 @@ class BeamResultantVector:
         cls,
         values: Mapping[str, float],
         *,
-        frame: str = FRAME_B,
+        frame: FrameTag = FRAME_B,
         about_xy: tuple[float, float] = BEAM_LOAD_AXIS_XY,
     ) -> BeamResultantVector:
         """Build from a mapping of component name → value (missing → 0)."""
@@ -411,7 +410,7 @@ class BeamResultantVector:
         twist_rad: float,
         *,
         s_to_b: bool,
-        frame: str,
+        frame: FrameTag,
     ) -> BeamResultantVector:
         t = float(twist_rad)
         if abs(t) < 1e-15 and frame == self.frame:
@@ -432,7 +431,7 @@ class BeamResultantVector:
             about_xy=about,
         )
 
-    def with_frame(self, frame: str) -> BeamResultantVector:
+    def with_frame(self, frame: FrameTag) -> BeamResultantVector:
         """Return a copy with a new frame tag (components / about unchanged)."""
         if frame == self.frame:
             return self
