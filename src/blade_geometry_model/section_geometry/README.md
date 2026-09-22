@@ -438,6 +438,12 @@ This is per-region 2-D geometry, not beam `EA` / `EI` / `GJ`
 ## Notes
 
 - Thickness kwargs are geometric wall gauges, not layups — materials via `section_bind`.
+- This package is gauge-agnostic: it does not import `section_gauge` or
+  `material_utilities`, and it does not quantise ply counts. `zone_gauges_m` is
+  a one-way zone-id → wall-gauge projection; production BSP supplies it from an
+  accepted `StationGaugeRealization`. Scalar skin/spar/web kwargs remain the
+  non-gauge API. Geometry's legacy safety clamp remains observationally no-op
+  for valid gauge-path input.
 - Emit midlines are in the twisted blade frame.
 - Unfittable webs appear on `StationLayoutResolution.dropped`. If no required
   web can be anchored → `InfeasibleSectionGeometry` (distinct from “too thick”).

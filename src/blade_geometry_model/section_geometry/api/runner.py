@@ -13,7 +13,7 @@ product; ``get_results()`` returns the built geometry.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
 from .worker import (
@@ -76,6 +76,7 @@ class SectionGeometryRunner:
         airfoil_for_spec: Any | None = None,
         resolution: StationLayoutResolution | None = None,
         spar_cap_ply_pitch_m: float | None = None,
+        zone_gauges_m: Mapping[str, float] | None = None,
     ) -> None:
         from .kwarg_aliases import (
             resolve_shear_web_thickness,
@@ -90,6 +91,21 @@ class SectionGeometryRunner:
             raise ValueError("airfoil is required")
         self._layout = layout
         self._airfoil = airfoil
+        self._zone_gauges_m = None if zone_gauges_m is None else dict(zone_gauges_m)
+        if self._zone_gauges_m is not None:
+            from .worker import _compat_kwargs_from_zone_gauges
+
+            if any(
+                v is not None
+                for v in (skin_thickness, spar_cap_thickness, shear_web_thickness)
+            ):
+                raise ValueError(
+                    "geometry received both zone_gauges_m and component thickness kwargs"
+                )
+            derived = _compat_kwargs_from_zone_gauges(self._zone_gauges_m)
+            skin_thickness = derived["skin_thickness"]
+            spar_cap_thickness = derived["spar_cap_thickness"]
+            shear_web_thickness = derived["shear_web_thickness"]
         self._t_skin_gauges = resolve_skin_gauges(
             skin_thickness=skin_thickness, required=True
         )
@@ -180,9 +196,15 @@ class SectionGeometryRunner:
         self._result = build_section_geometry(
             resolution.layout,
             self._airfoil,
-            skin_thickness=self._t_skin_gauges,
-            spar_cap_thickness=self._t_spar,
-            shear_web_thickness=self._t_web,
+            **(
+                {"zone_gauges_m": self._zone_gauges_m}
+                if self._zone_gauges_m is not None
+                else {
+                    "skin_thickness": self._t_skin_gauges,
+                    "spar_cap_thickness": self._t_spar,
+                    "shear_web_thickness": self._t_web,
+                }
+            ),
             twist_rad=self._twist_rad,
             outputs=self._outputs,
             props_backend=self._props_backend,
@@ -243,6 +265,7 @@ class SectionGeometryRunner:
             twist_rad=self._twist_rad,
             outputs=self._outputs,
             web_x_positions_m=web_x,
+            zone_gauges_m=self._zone_gauges_m,
         )
 
 

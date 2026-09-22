@@ -37,6 +37,37 @@ from blade_structure_utilities.mesh_utilities.area_2d.spec import QuadtreeSpec
 LayoutInput = SystemLayoutSpec | SectionLayout
 
 
+def _compat_kwargs_from_zone_gauges(zone_gauges_m: Mapping[str, float]) -> dict[str, Any]:
+    """One-way projection: group zone-id thicknesses into geometry wall gauges.
+
+    Geometry stays gauge-agnostic and does not import ``section_gauge``.
+    Callers that already hold a realization should pass ``zone_gauges_m``
+    rather than collapsing to component maxima first.
+    """
+    items = {str(k): float(v) for k, v in dict(zone_gauges_m).items()}
+    skins = [v for k, v in items.items() if k.startswith("skin:")]
+    caps = [v for k, v in items.items() if k.startswith("cap:") or k.startswith("spar:")]
+    webs = sorted(
+        ((k, v) for k, v in items.items() if k.startswith("web:")),
+        key=lambda kv: kv[0],
+    )
+    ss = float(items.get("skin:suction", max(skins) if skins else 0.0))
+    ps = float(items.get("skin:pressure", ss))
+    web_vals = [float(v) for _, v in webs]
+    skin_kw: float | tuple[float, float] = ss if ss == ps else (ss, ps)
+    if not web_vals:
+        web_kw: float | list[float] = 0.0
+    elif all(v == web_vals[0] for v in web_vals):
+        web_kw = web_vals[0]
+    else:
+        web_kw = web_vals
+    return {
+        "skin_thickness": skin_kw,
+        "spar_cap_thickness": float(max(caps) if caps else 0.0),
+        "shear_web_thickness": web_kw,
+    }
+
+
 def _layout_web_fracs(layout: LayoutInput) -> tuple[float, ...]:
     return tuple(float(f) for f in (layout.web_chord_fracs or ()))
 
@@ -235,6 +266,12 @@ class SectionGeometryResult:
     stage_timings: dict[str, float] | None = None
 
 
+def _thickness_cache_token(value: Any) -> Any:
+    if isinstance(value, (list, tuple)):
+        return tuple(round(float(x), 12) for x in value)
+    return round(float(value), 12)
+
+
 def section_geometry_prep_key(
     layout: LayoutInput,
     airfoil: AirfoilSDF,
@@ -246,6 +283,7 @@ def section_geometry_prep_key(
     props_backend: str | None = None,
     outputs: Collection[str] = ALL_OUTPUT_GATES,
     web_x_positions_m: Sequence[float] | None = None,
+    zone_gauges_m: Mapping[str, float] | None = None,
 ) -> tuple[Any, ...]:
     """Stable cache key for a geometry worker call (layout + airfoil + DVs + gates).
 
@@ -255,11 +293,17 @@ def section_geometry_prep_key(
     """
     from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
         resolve_shear_web_thickness,
-        resolve_skin_thickness,
+        resolve_skin_gauges,
         resolve_spar_cap_thickness,
     )
 
-    t_skin_v = resolve_skin_thickness(
+    if zone_gauges_m:
+        derived = _compat_kwargs_from_zone_gauges(zone_gauges_m)
+        skin_thickness = derived["skin_thickness"]
+        spar_cap_thickness = derived["spar_cap_thickness"]
+        shear_web_thickness = derived["shear_web_thickness"]
+
+    t_skin_gauges = resolve_skin_gauges(
         skin_thickness=skin_thickness, required=True
     )
     t_spar_v = resolve_spar_cap_thickness(
@@ -304,16 +348,22 @@ def section_geometry_prep_key(
         None if web_x_positions_m is None
         else tuple(round(float(x), 12) for x in web_x_positions_m)
     )
+    zone_key = (
+        None
+        if not zone_gauges_m
+        else tuple(sorted((str(k), round(float(v), 12)) for k, v in zone_gauges_m.items()))
+    )
     return (
         layout_key,
         airfoil_id,
-        float(t_skin_v),
-        float(t_spar_v),
-        float(t_web_v),
+        _thickness_cache_token(t_skin_gauges),
+        _thickness_cache_token(t_spar_v),
+        _thickness_cache_token(t_web_v),
         float(twist_rad),
         props_backend,
         out_key,
         web_key,
+        zone_key,
     )
 
 
@@ -527,7 +577,7 @@ def build_section_with_thicknesses(
     """
     from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
         resolve_shear_web_thickness,
-        resolve_skin_thickness,
+        resolve_skin_gauges,
         resolve_spar_cap_thickness,
         resolve_twist_rad,
     )
@@ -543,7 +593,7 @@ def build_section_with_thicknesses(
             twist_angle_rad=twist_angle_rad,
             twist_angle=twist_angle,
         ),
-        skin_thickness=resolve_skin_thickness(
+        skin_thickness=resolve_skin_gauges(
             skin_thickness=skin_thickness, required=True
         ),
         spar_cap_thickness=resolve_spar_cap_thickness(
@@ -583,6 +633,7 @@ def build_section_geometry(
     web_x_positions_m: Sequence[float] | None = None,
     web_y_coords: Sequence[tuple[float, float]] | None = None,
     spar_cap_ply_pitch_m: float | None = None,
+    zone_gauges_m: Mapping[str, float] | None = None,
 ) -> SectionGeometryResult:
     """Geometry worker entry: assemble section and emit gated carriers.
 
@@ -601,12 +652,25 @@ def build_section_geometry(
     """
     from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
         resolve_shear_web_thickness,
-        resolve_skin_thickness,
+        resolve_skin_gauges,
         resolve_spar_cap_thickness,
         resolve_twist_rad,
     )
 
-    skin = resolve_skin_thickness(
+    if zone_gauges_m:
+        if any(
+            v is not None
+            for v in (skin_thickness, spar_cap_thickness, shear_web_thickness)
+        ):
+            raise ValueError(
+                "geometry received both zone_gauges_m and component thickness kwargs"
+            )
+        derived = _compat_kwargs_from_zone_gauges(zone_gauges_m)
+        skin_thickness = derived["skin_thickness"]
+        spar_cap_thickness = derived["spar_cap_thickness"]
+        shear_web_thickness = derived["shear_web_thickness"]
+
+    skin = resolve_skin_gauges(
         skin_thickness=skin_thickness, required=True
     )
     spar = resolve_spar_cap_thickness(
@@ -649,6 +713,7 @@ def build_section_geometry(
         props_backend=backend_key,
         outputs=out_set,
         web_x_positions_m=web_x_positions_m,
+        zone_gauges_m=zone_gauges_m,
     )
 
     # Stage sink is always collected; attached to the result only when profiling.
@@ -659,9 +724,9 @@ def build_section_geometry(
             airfoil,
             layout,
             twist_rad=float(twist_rad),
-            skin_thickness=float(skin),
+            skin_thickness=skin,
             spar_cap_thickness=float(spar),
-            shear_web_thickness=float(web),
+            shear_web_thickness=web,
             web_x_positions_m=web_x_positions_m,
             web_y_coords=web_y_coords,
             stage_sink=stage_s,
@@ -749,7 +814,11 @@ def build_section_geometry(
             locus_af = airfoil if abs(float(twist_rad)) < 1e-10 else None
             cap_depth = None
             if locus_af is not None:
-                cap_depth = float(skin) + 0.5 * float(spar)
+                skin_max = max(
+                    float(x)
+                    for x in (skin if isinstance(skin, (list, tuple)) else (skin,))
+                )
+                cap_depth = float(skin_max) + 0.5 * float(spar)
             midline_strips = tuple(
                 build_shell_strip_topology(
                     raw,

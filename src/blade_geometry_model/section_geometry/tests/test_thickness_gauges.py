@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from blade_structure_utilities.geometry_utilities.section_geometry.api.kwarg_aliases import (
     resolve_shear_web_thickness,
     resolve_skin_gauges,
@@ -44,3 +46,77 @@ def test_multicell_asymmetric_skin_recipes():
     w1 = mcs.wall_recipes["shear_web_1"]
     assert float(w0.thickness) == 0.005
     assert float(w1.thickness) == 0.007
+
+
+def test_zone_gauges_m_preserve_independent_webs(airfoil=None):
+    from blade_structure_utilities.geometry_utilities.section_geometry.api.runner import (
+        SectionGeometryRunner,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
+        resolve_system_type,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import (
+        AirfoilSDF,
+    )
+
+    af = airfoil or AirfoilSDF.from_naca("2412", n_points=80, chord=1.0)
+    result = (
+        SectionGeometryRunner(
+            layout=resolve_system_type("2D-F"),
+            airfoil=af,
+            zone_gauges_m={
+                "skin:suction": 0.004,
+                "skin:pressure": 0.004,
+                "cap:suction": 0.010,
+                "cap:pressure": 0.010,
+                "web:0": 0.005,
+                "web:1": 0.008,
+            },
+            outputs=("midlines",),
+        )
+        .execute()
+        .get_results()
+    )
+    webs = {
+        str(getattr(s, "label", "")): float(s.thickness_m)
+        for s in result.midline_strips
+        if str(getattr(s, "kind", "")) == "web"
+    }
+    assert len(webs) >= 2
+    thicknesses = sorted(webs.values())
+    assert thicknesses[0] == pytest.approx(0.005, abs=1e-9)
+    assert thicknesses[-1] == pytest.approx(0.008, abs=1e-9)
+
+
+def test_prep_key_distinguishes_unequal_zone_maps():
+    from blade_structure_utilities.geometry_utilities.section_geometry.api.worker import (
+        section_geometry_prep_key,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.layout.system_layout import (
+        resolve_system_type,
+    )
+    from blade_structure_utilities.geometry_utilities.section_geometry.sdf.airfoil import (
+        AirfoilSDF,
+    )
+
+    af = AirfoilSDF.from_naca("2412", n_points=40, chord=1.0)
+    layout = resolve_system_type("2D-F")
+    common = {
+        "skin:suction": 0.004,
+        "skin:pressure": 0.004,
+        "cap:suction": 0.010,
+        "cap:pressure": 0.010,
+    }
+    a = section_geometry_prep_key(
+        layout,
+        af,
+        zone_gauges_m={**common, "web:0": 0.005, "web:1": 0.005},
+        outputs=("properties",),
+    )
+    b = section_geometry_prep_key(
+        layout,
+        af,
+        zone_gauges_m={**common, "web:0": 0.005, "web:1": 0.008},
+        outputs=("properties",),
+    )
+    assert a != b
