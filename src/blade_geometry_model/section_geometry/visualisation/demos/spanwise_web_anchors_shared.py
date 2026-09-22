@@ -13,7 +13,7 @@ from blade_structure_precompute.module.internal_force import InternalForce
 from blade_structure_precompute.examples._shared.scaled_geometry import analysis_geometry_from_blade
 
 DEFAULT_ROTOR = "new_3.2m_rotor"
-DEFAULT_MATERIALS = {"skin": 2, "spar": 2, "web": 2}
+DEFAULT_MATERIALS = {"skin": 17, "spar": 17, "web": 17}
 
 
 def build_stations(

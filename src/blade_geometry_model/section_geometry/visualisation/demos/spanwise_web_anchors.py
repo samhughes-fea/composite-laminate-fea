@@ -56,7 +56,7 @@ from blade_structure_utilities.geometry_utilities.section_geometry.sections.spar
 logging.disable(logging.INFO)
 
 ROTOR = "new_3.2m_rotor"
-MATERIALS = {"skin": 2, "spar": 2, "web": 2}
+MATERIALS = {"skin": 17, "spar": 17, "web": 17}
 # One cap-bearing layout per family. Family A has no spar caps, so the cap half
 # of this probe does not apply there.
 LAYOUTS = ("5D-F", "5C-CN", "5B-F")

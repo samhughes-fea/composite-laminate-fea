@@ -89,7 +89,7 @@ from feature_flythrough_specs import DEFAULT_PROFILE, PROFILES  # noqa: E402
 logging.disable(logging.INFO)
 
 ROTOR = "new_3.2m_rotor"
-MATERIALS = {"skin": 2, "spar": 2, "web": 2}
+MATERIALS = {"skin": 17, "spar": 17, "web": 17}
 LAYOUT_KEY = "5A-F"
 
 # Reference gauges. The point of this figure is where the webs sit, not the sizing.
