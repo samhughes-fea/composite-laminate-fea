@@ -794,7 +794,6 @@ def build_section_geometry(
 
         from blade_structure_utilities.geometry_utilities.section_geometry.midlines.shell_midline_export import (
             build_shell_midline_strips,
-            rotate_chord_to_blade,
         )
         from blade_structure_utilities.geometry_utilities.section_geometry.topology.shell_strip_topology import (
             build_shell_strip_topology,

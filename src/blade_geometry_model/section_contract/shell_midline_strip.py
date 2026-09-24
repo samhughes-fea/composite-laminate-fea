@@ -68,6 +68,9 @@ class ShellMidlineStrip:
     bay_index
         For skin only when ``skin_arc == "bay"``: zero-based bay index between
         consecutive webs (``0`` … ``n_webs-2``).  ``None`` otherwise.
+    zone_id, gauge_dof_id, topology_generation, stack_family_digest, repeats_k
+        Optional structural-gauge identity stamped when geometry is built from
+        a :class:`StationGaugeState`. ``None`` on the thickness-authority path.
     """
 
     label: str
@@ -80,6 +83,11 @@ class ShellMidlineStrip:
     skin_side: str | None = None
     skin_arc: str | None = None
     bay_index: int | None = None
+    zone_id: str | None = None
+    gauge_dof_id: str | None = None
+    topology_generation: int | None = None
+    stack_family_digest: str | None = None
+    repeats_k: int | None = None
 
     def arc_length_m(self) -> float:
         """Total polyline arc length in metres (twisted pitch-axis blade frame)."""

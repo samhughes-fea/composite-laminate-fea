@@ -125,6 +125,7 @@ def _render_system(
         residual_mesh=None,
         ax=ax,
         alpha=0.5,
+        core_alpha=0.22,
         title=f"{key}\n(n_webs={n_webs}, {z}, twist={twist_use:g}°)",
         show_legend=False,
     )
