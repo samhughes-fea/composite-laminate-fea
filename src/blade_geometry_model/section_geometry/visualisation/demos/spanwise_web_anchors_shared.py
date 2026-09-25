@@ -52,11 +52,11 @@ def build_stations(
         inputs.blade_geometry, inputs.sampling_distribution_parameters
     )
     try:
-        ifm = InternalForce(scaling=scale, loading=inputs.loading)
+        ifm = InternalForce(geometry=scale, loading=inputs.loading)
         ifm.execute()
         Feasibility(
             internal_force=ifm,
-            scaling=scale,
+            geometry=scale,
             structural_system_parameters=inputs.structural_system_parameters,
             apply_thickening=True,
             tc_iteration_mode="thicken_only",
