@@ -41,7 +41,7 @@ Deviations are stated per entry.
 | [SG-013](#sg-013) | Family-C (and B) pads recenter onto `argmax(depth)` instead of the web / band center | **Fixed** — `extent_anchor="band_center"` symmetric half-width |
 | [SG-014](#sg-014) | Cell wall loops pair the wrong web ends on B-frame sections and carry no wall membership; every consumer re-guesses it | **Fixed** — loops are faces of the labelled wall graph and carry `wall_labels` |
 | [SG-015](#sg-015) | Closed-ring suction/pressure split and the side fallback read chord-first coordinates on B-frame strips | **Fixed** — transposed at the call; side from `X_B` |
-| [SG-016](#sg-016) | 50 package tests fail at HEAD (`SparCap._camber_surface`, g-row hardening) | **Open** — pre-existing, not investigated |
+| [SG-016](#sg-016) | 50 package tests fail at HEAD (`SparCap._camber_surface`, g-row hardening) | **Fixed** — wrap copies `_camber_surface`; barrel / comment gates cleared |
 | [SG-017](#sg-017) | Caps are built from the skin but their bond to it is never emitted | **Fixed** — `bond_caps_to_skin` pairs every cap vertex with the skin; `ShellMidlineStrip.bonds` |
 
 ## Standing invariant (established 2026-08-30)
@@ -1172,15 +1172,30 @@ side fallback reads `X_B` (suction on `+X_B`).
 
 **50 package tests fail at HEAD (`SparCap._camber_surface`, g-row hardening)**
 
-**Status:** Open — pre-existing; recorded, not investigated
+**Status:** Fixed
 **Found:** 2026-09-25
+**Fixed:** 2026-09-25
+**Area:** `sections/build_spar_caps.py::_wrap_expr_cap`, `sections/cap_ply_snap.py`, package `__all__`
 
-At `ad560972`, before any SG-014 change, `tests/test_spar_cap_midline_offset.py`
-fails 48 cases with `AttributeError: 'SparCap' object has no attribute
-'_camber_surface'`, and `tests/test_g_row_hardening.py` fails
-`test_no_laminate_identifiers_in_production` and
-`test_g_row_public_barrel_allowlist`. They are identical on a clean worktree of
-that commit, so they are independent of SG-014.
+### Symptom
+At `ad560972`, `test_spar_cap_midline_offset` failed 48 cases with
+`AttributeError: 'SparCap' object has no attribute '_camber_surface'`, and
+`test_g_row_hardening` failed on a `laminate` comment and barrel extras.
+
+### Root cause
+`_wrap_expr_cap` rebuilds Family-D caps via `SparCap.__new__` and copied
+`_camber_xy` but not `_camber_surface`, which `midline_polyline` requires.
+Separately, a production comment used the word `laminate`, and
+`apply_spar_cap_runout` / `max_spar_from_cavity` were on `__all__` without being
+on the G-row allowlist (matrix silent → deep-only).
+
+### Fix
+Copy `_camber_surface` in `_wrap_expr_cap`; reword the ply-snap comment; drop the
+run-out helpers from the public barrel (lazy deep import remains).
+
+### Verification
+`test_spar_cap_midline_offset` + `test_g_row_hardening` — 83 passed. Package
+graphify refreshed under `section_geometry/graphify-out/`.
 
 ## SG-017
 
