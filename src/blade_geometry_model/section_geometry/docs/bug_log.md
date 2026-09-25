@@ -42,6 +42,7 @@ Deviations are stated per entry.
 | [SG-014](#sg-014) | Cell wall loops pair the wrong web ends on B-frame sections and carry no wall membership; every consumer re-guesses it | **Fixed** — loops are faces of the labelled wall graph and carry `wall_labels` |
 | [SG-015](#sg-015) | Closed-ring suction/pressure split and the side fallback read chord-first coordinates on B-frame strips | **Fixed** — transposed at the call; side from `X_B` |
 | [SG-016](#sg-016) | 50 package tests fail at HEAD (`SparCap._camber_surface`, g-row hardening) | **Open** — pre-existing, not investigated |
+| [SG-017](#sg-017) | Caps are built from the skin but their bond to it is never emitted | **Fixed** — `bond_caps_to_skin` pairs every cap vertex with the skin; `ShellMidlineStrip.bonds` |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -1180,3 +1181,56 @@ fails 48 cases with `AttributeError: 'SparCap' object has no attribute
 `test_no_laminate_identifiers_in_production` and
 `test_g_row_public_barrel_allowlist`. They are identical on a clean worktree of
 that commit, so they are independent of SG-014.
+
+## SG-017
+
+**Caps are built from the skin but their bond to it is never emitted**
+
+**Status:** Fixed
+**Found:** 2026-09-25 (thin_wall_section TW-001; section_loads SL-012)
+**Fixed:** 2026-09-25
+**Area:** `topology/cap_skin_bonds.py` (new), `section_contract.ShellMidlineStrip.bonds` / `StripBond`
+
+### Symptom
+
+Every consumer that needs to know which skin a spar cap is attached to guessed
+it: Channel C decided which skin segments a cap "stacks" on by a chordwise
+bounding box and a flap tolerance of 15 % of the section's flap span
+(section_loads SL-012). The exact thin-wall kernel cannot solve shear with a cap
+at all without the attachment (TW-001): the cap's axial rate has to enter the
+skin somewhere.
+
+### Root cause
+
+`cap_skin_ray_resample` builds each cap's interior vertices from inward rays cast
+from skin vertices, so the correspondence exists while the cap is built — but the
+hits are merged and filtered, and only the cap polyline is emitted. As with
+SG-014, the producer knew the topology and the contract dropped it.
+
+### Fix
+
+`bond_caps_to_skin`, the last topology pass (nothing after it may move cap or
+skin vertices):
+
+- the skin arcs of the cap's declared surface are chained head to tail;
+- each cap vertex is paired with its perpendicular foot on that chain, and the
+  feet must advance monotonically;
+- the cap-to-skin map is piecewise linear between those pairs; every skin vertex
+  inside the footprint takes its cap partner **from the same map**. An earlier
+  draft projected skin vertices back onto the cap independently; near a web
+  junction (a 0.28 mm skin segment beside a 1.2 mm cap segment) the two
+  projections are not mutual inverses and interleaved (3D-F and 3C-F at 0.2–1.0 m),
+  which the one-map construction rules out;
+- a foot within a quarter of the adjacent segment of an existing vertex is paired
+  with that vertex — this chooses which points correspond, never where anything
+  is; every other foot is inserted **on** its polyline, so no geometry moves;
+- one `StripBond` per host skin arc, as coordinate pairs (they survive strip
+  reversal in the mesh handoff).
+
+### Verification
+
+60 worker sections (1C-F/CN, 2D-F/CN, 3D-F, 3C-F, 4D-F/CN, 2B-F, 0B × twist 0 /
+0.6 / 1.2 rad × chord 1.0 / 0.2 m): every cap bonded one-to-one, and the thin-wall
+kernel integrates every unit load back to ≤ 6.4×10⁻¹¹ with the caps at their own
+offset.
+
