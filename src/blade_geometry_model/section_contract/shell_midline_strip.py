@@ -90,6 +90,11 @@ class ShellMidlineStrip:
     zone_id, gauge_dof_id, topology_generation, stack_family_digest, repeats_k
         Optional structural-gauge identity stamped when geometry is built from
         a :class:`StationGaugeState`. ``None`` on the thickness-authority path.
+    placement_policy_id, placement_digest, reference_face
+        Optional surface-aware placement stamp (WP3 D3.4). Policy id / digest
+        from ``layup.types.placement``; ``reference_face`` is the enum value
+        string (e.g. ``outer_mould_line``). ``None`` until geometry producers
+        carry placement through to the strip.
     bonds
         For caps: how the strip is bonded to the skin arcs it lies on
         (:class:`StripBond`, one per host arc). Empty for skin and web.
@@ -110,6 +115,9 @@ class ShellMidlineStrip:
     topology_generation: int | None = None
     stack_family_digest: str | None = None
     repeats_k: int | None = None
+    placement_policy_id: str | None = None
+    placement_digest: str | None = None
+    reference_face: str | None = None
     bonds: tuple[StripBond, ...] = ()
 
     def arc_length_m(self) -> float:
