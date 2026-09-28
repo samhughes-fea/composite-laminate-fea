@@ -1,7 +1,7 @@
 """Map placement construction strings onto wall-normal offsets (WP3 D3.1 / D3.2).
 
 Offsets are signed distances along the wall build direction, measured from the
-fixed reference face into the laminate. Positive values always point into the
+fixed reference face into the wall stack. Positive values always point into the
 material (or outward from a midsurface origin for webs).
 
 This module deliberately speaks in *string* reference/build tokens so
