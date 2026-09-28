@@ -43,6 +43,7 @@ Deviations are stated per entry.
 | [SG-015](#sg-015) | Closed-ring suction/pressure split and the side fallback read chord-first coordinates on B-frame strips | **Fixed** — transposed at the call; side from `X_B` |
 | [SG-016](#sg-016) | 50 package tests fail at HEAD (`SparCap._camber_surface`, g-row hardening) | **Fixed** — wrap copies `_camber_surface`; barrel / comment gates cleared |
 | [SG-017](#sg-017) | Caps are built from the skin but their bond to it is never emitted | **Fixed** — `bond_caps_to_skin` pairs every cap vertex with the skin; `ShellMidlineStrip.bonds` |
+| [SG-018](#sg-018) | Residual nearest / argmin sites vs standing invariant (Exactness item 6 follow-on) | **Logged** (2026-09-26) — no relocation defect |
 
 ## Standing invariant (established 2026-08-30)
 
@@ -71,13 +72,13 @@ minimum web spacing (`min_web_gap_frac`, 2 % of chord) fell 200x → 48x → 10x
 from a 1.0 m to a 0.05 m chord, and is now constant at ~200x. Behaviour at the
 1 m reference chord is unchanged (99.93 µm vs the old fixed 100 µm).
 
-### What a grep still finds (verified 2026-08-30, after cleanup)
+### What a grep still finds (verified 2026-09-26, Exactness item 6 follow-on)
 
 The tables above are about *relocation*, not about whether a symbol appears.
 This section covers the **whole package plus its downstream callers**, including
 `tests/` and `visualisation/` — unlike the tolerance audit below, which excludes
 them. Nothing in this list is a defect except where noted, so do not "clean
-them up" without reading the linked entry first.
+them up" without reading the linked entry first. Full classification: [SG-018](#sg-018).
 
 `point_to_open_polyline_nearest` — 4 live sites:
 
@@ -90,6 +91,12 @@ them up" without reading the linked entry first.
 
 It is **gone** from `topology/cap_web_junctions.py` and from `section_mesh`'s
 `centerline_mesh.py`, neither of which imports it any more.
+
+Other production `argmin` / nearest (2026-09-26): `cell_wall_loop_builders._node_of`
+is a 1 nm coincidence **raise**; `cap_skin_bonds._foot` constructs SG-017 bonds
+(does not relocate); LE `argmin` on `X_B` identifies the polygon LE vertex;
+`nearest_on_closed_polyline*` is defined with **no** production callers in this
+package. SDF primitive "nearest" is field math, not strip membership.
 
 `_SKIN_RAY_CAP_BBOX_MARGIN_M` — **no live sites.** Deleted with SG-006; the only
 surviving mention is a historical sentence in
@@ -324,6 +331,20 @@ Pinned by `tests/test_web_foot_axis_snap.py` — 40 cases
 ~~An earlier fix made topology's *guess* correct, by intersecting the web axis
 with the skin instead of projecting perpendicular to it.~~ Superseded by the
 above: it removed the symptom, not the need to guess.
+
+### Follow-on, 2026-09-27 (WP6 tip mono)
+
+Confirmatory 2D-F e2e crashed on tip mono_after_redispatch: frozen thin-skin
+`web_y` + raised skin (~7 mm) + tip twist made `flapwise_web_sframe_inputs` miss
+B-frame IML intercepts and **rotate** the stale anchors; emit then returned a
+blind `origin + t/2` foot (~3.5 mm off mid — SG-002 in `build_cell_wall_loops`).
+
+Fix: refuse the rotate fallback (`InfeasibleSectionGeometry`); harden
+`_extend_to_skin_mid_surface` (longer oracle / bidirectional SDF; no blind
+offset); mono gauge projection keeps prior gauges when raise is infeasible.
+Pinned by `test_tip_absolute_2a_f_loops_build_under_twist`,
+`test_tip_fractional_2a_f_loops_build_under_twist`, and
+`test_stale_frozen_web_y_under_twist_raises_infeasible_not_sg002_gap`.
 
 ### Cleanup, 2026-08-30
 
@@ -1248,4 +1269,35 @@ skin vertices):
 0.6 / 1.2 rad × chord 1.0 / 0.2 m): every cap bonded one-to-one, and the thin-wall
 kernel integrates every unit load back to ≤ 6.4×10⁻¹¹ with the caps at their own
 offset.
+
+## SG-018
+
+**Residual nearest / argmin sites vs standing invariant**
+
+**Status:** Logged — 2026-09-26 (no relocation defect)
+**Area:** package-wide production nearest / `argmin` (Exactness item 6 follow-on)
+
+### Symptom
+Programme item 6 asked for a review of remaining "nearest" sites against
+"topology splits and indexes; it never relocates."
+
+### Classification (production, excluding tests/demos unless they drive emit)
+
+| Site | Verdict |
+|---|---|
+| `split_skin_at_junctions` + `point_to_open_polyline_nearest` | OK — indexes arc-s; does not write the web foot |
+| `cell_wall_loop_builders._node_of` | OK — coincidence check; raises above `WEB_FOOT_COINCIDENCE_TOL_M` |
+| `cap_skin_bonds._foot` | OK — SG-017 bond construction; inserts on the polyline, does not move existing vertices |
+| `recipes/sdf_ir/outer_skin.py`, `sdf/airfoil.py`, `sections/clips.py` LE `argmin` | OK — identify LE vertex on the discrete airfoil polygon |
+| `sections/cap_feasibility.py` `argmin` on `xs_q` | OK — seed a design sample, not topology membership |
+| `nearest_on_closed_polyline*` | definition only; no production caller |
+| `sdf/primitives.py` nearest box | SDF distance, not strip identity |
+
+No site rewrites geometry or invents wall/strip membership when the producer
+already knows it. Survivors stay as documented indexing / coincidence / emit
+construction.
+
+### Verification
+Re-grep of `point_to_open_polyline_nearest`, `nearest_on_closed_polyline`, and
+production `np.argmin` under `section_geometry/` (2026-09-26).
 

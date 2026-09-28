@@ -93,7 +93,7 @@ def test_bonding_moves_no_geometry(key):
 @pytest.mark.parametrize("key, twist_rad, chord", CASES)
 def test_the_thin_wall_kernel_is_exact_on_bonded_worker_sections(key, twist_rad, chord):
     """With the emitted bonds, every unit load integrates back exactly (TW-001)."""
-    from blade_structure_utilities.geometry_utilities.thin_wall_section import (
+    from blade_structure_utilities.geometry_utilities.section_thin_wall_model import (
         ThinWall,
         WallBond,
         axial_field,
